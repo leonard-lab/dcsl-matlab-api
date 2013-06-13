@@ -379,9 +379,9 @@ classdef Miabots < handle
                 end
                 
                 u_x = (v_left + v_right)/2;
-                u_omega = (v_right - v_left)*2*pi/(0.1);
+                u_omega = (v_right - v_left)*pi/(0.1);
                 
-                if omega < eps
+                if abs(omega) < eps
                     theta_out = theta;
                     x_out = x + u_x*dt*cos(theta);
                     y_out = y + u_x*dt*sin(theta);
