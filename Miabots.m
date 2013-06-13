@@ -236,6 +236,7 @@ classdef Miabots < handle
                 obj.sim_command(command_array)
             end
         end
+        
     end
     
     methods (Access = private)
@@ -298,6 +299,24 @@ classdef Miabots < handle
                 u_omega = commands_in(i,2);
                 u_z = commands_in(i,3);
                 
+                v_right = (u_x + u_omega*0.1/(2*pi));
+                v_left = (u_x - u_omega*0.1/(2*pi));
+                
+                if v_right > 1
+                    v_right = 1;
+                elseif v_right < -1
+                    v_right = -1;
+                end
+                
+                if v_left > 1
+                    v_left = 1;
+                elseif v_left < -1
+                    v_left = -1;
+                end
+                
+                u_x = (v_left + v_right)/2;
+                u_omega = (v_right - v_left)*pi/(0.1);
+                
                 if omega < eps
                     theta_out = theta;
                     x_out = x + u_x*dt*cos(theta);
@@ -307,7 +326,7 @@ classdef Miabots < handle
                     radius = u_x/u_omega;
                     x_out = x + radius*(sin(theta_out) - sin(theta)) + normrnd(0, noise(1));
                     y_out = y + radius*(cos(theta) - cos(theta_out)) + normrnd(0, noise(2));
-                    theta_out = theta_out + normrnd(0, noise(4));
+                    theta_out = wrap2pi(theta_out + normrnd(0, noise(4)));
                 end
                 states_out(i,:) = [x_out y_out z u_x v_z theta_out u_omega];    
             end
