@@ -337,12 +337,12 @@ classdef Miabots < handle
                  t = k*obj.Ts;
                  commands = obj.control_law(t, obj.states);
                  if k == 0
-                     obj.command_history(:, 1, :) = [t commands];
+                     obj.command_history(:, 1, :) = [ones(obj.n_robots,1)*t commands];
                  else
-                     obj.command_history(:, end+1, :) = [t commands];
+                     obj.command_history(:, end+1, :) = [ones(obj.n_robots,1)*t commands];
                  end
                  obj.states = obj.propagate(obj.states, commands, obj.Ts, obj.sim_noise);
-                 obj.state_history(:, end+1, :) = [t obj.states];
+                 obj.state_history(:, end+1, :) = [ones(obj.n_robots,1)*t obj.states];
              end
         end
         
