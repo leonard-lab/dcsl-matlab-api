@@ -1,4 +1,4 @@
-function [ commands ] = TestControlLaw( states )
+function [ commands ] = TestControlLaw(~, states )
 %TestControlLaw Summary of this function goes here
 %   Detailed explanation goes here
 

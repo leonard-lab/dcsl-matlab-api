@@ -22,7 +22,7 @@ classdef Miabots < handle
     % return input commands for the robots. Time should be a scalar in
     % seconds. Current states should be a n_robots X 7 matrix with the
     % second dimension in the format [x y z vx vz theta theta_dot].
-    % Commands should be returned as a n_robots X 4 matrix with the
+    % Commands should be returned as a n_robots X 3 matrix with the
     % second dimension in the format [u_x u_theta u_z].
     % Example: @control_law if control takes two arguments (time, states)
     % Example: @(t,x) control_law(t,x,additional,arguments)
@@ -40,8 +40,8 @@ classdef Miabots < handle
     % of the random gaussian noise applied to [x y z theta] during
     % simulation.
     %
-    % 'Ts': Number. Default: 0.04. Time step for measurement/control update. Only affects
-    % simulation.
+    % 'Ts': Number. Default: 0.04. Time step for measurement/control
+    % update. Only affects simulation.
     %
     % 'URI': String. Default: 'ws://localhost:9090'. URI of rosbridge
     % server.
@@ -64,7 +64,7 @@ classdef Miabots < handle
     %   return input commands for the robots. Time should be a scalar in
     %   seconds. Current states should be a n_robots X 7 matrix with the
     %   second dimension in the format [x y z vx vz theta theta_dot].
-    %   Commands should be returned as a n_robots X 4 matrix with the
+    %   Commands should be returned as a n_robots X 3 matrix with the
     %   second dimension in the format [u_x u_theta u_z].
     %
     %   run_time - Time in seconds to run system or to simulate. To run ROS
@@ -190,13 +190,13 @@ classdef Miabots < handle
             poses = p.Results.initial_poses;
             obj.n_robots = size(poses, 1);
             obj.states = [poses(:,1:3) zeros(obj.n_robots,2) poses(:,4) zeros(obj.n_robots, 1)];
-            obj.state_history(1, :) = [0 obj.states];
+            obj.state_history(1, 1, :) = [0 obj.states];
             
             obj.sim = p.Results.sim;
             obj.sim_noise = p.Results.sim_noise;
             obj.URI = p.Results.uri;
             obj.control_mode = p.Results.control_mode;
-            obj.Ts = p.Results.measurement_time_step;
+            obj.Ts = p.Results.Ts;
             obj.run_time = p.Results.run_time;
             obj.control_law = p.Results.control_law;
         end
@@ -270,14 +270,14 @@ classdef Miabots < handle
              
              for k = 0:t_steps
                  t = k*obj.Ts;
-                 commands = obj.control_law(obj.states);
+                 commands = obj.control_law(t, obj.states);
                  if k == 0
-                     obj.command_history(1, :) = [t commands];
+                     obj.command_history(:, 1, :) = [t commands];
                  else
-                     obj.command_history(end+1, :) = [t commands];
+                     obj.command_history(:, end+1, :) = [t commands];
                  end
                  obj.states = obj.propagate(obj.states, commands, obj.Ts, obj.sim_noise);
-                 obj.state_history(end+1, :) = [t obj.states];
+                 obj.state_history(:, end+1, :) = [t obj.states];
              end
         end
         
