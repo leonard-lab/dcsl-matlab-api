@@ -99,6 +99,21 @@ classdef Miabots < handle
     %   X 4 matrix with the second dimension in the format [u_x u_theta
     %   u_z].
     %
+    %   get_history(robot_ID, parameter) robot_ID is the index of the
+    %   robot's initial_poses in that matrix. parameter options are:
+    %   'state': returns n_time_stepsX7 array with second dimension as [x y
+    %   z vx vz theta theta_dot]
+    %   'state_times': returns n_time_steps vector with times of state
+    %   updates
+    %   'x', 'y', 'z', 'vx', 'vz', 'theta', 'theta_dot': returns
+    %   n_time_steps vector with corresponding state history
+    %   'command': returns n_time_stepsX3 array with second dimension as
+    %   [ux utheta uz]
+    %   'command_times': returns n_time_steps vector with times of command
+    %   sends
+    %   'ux' 'utheta' 'uz': returns n_time_steps vector with corresponding
+    %   command history
+    %
     % LICENSE
     %
     % This software is covered under the 2-clause BSD license.
@@ -237,6 +252,55 @@ classdef Miabots < handle
             end
         end
         
+        function history = get_history(obj, robot_ID, option)
+            %{
+            p = inputParser;
+            
+            expected_options = {'states', 'state_times', 'x', 'y', 'z', 'vx', 'vz', 'theta', 'theta_dot', 'commands', 'command_times', 'ux', 'utheta', 'uz'};
+            addRequired(p, 'robot_ID', @(x) (x > 0) && (x <= obj.n_robots));
+            addRequired(p, 'option', @(x) any(validateattributes(x, expected_options)));
+            
+            parse(p, robot_ID, option);
+            
+            choice = p.Results.option;
+            ID = p.Results.robot_ID;
+            %}
+            
+            choice = option;
+            ID = robot_ID;
+            
+            switch choice
+                case 'states'
+                    history = squeeze(obj.state_history(ID, :, 2:8));
+                case 'state_times'
+                    history = squeeze(obj.state_history(ID, :, 1));
+                case 'x'
+                    history = squeeze(obj.state_history(ID, :, 2));
+                case 'y'
+                    history = squeeze(obj.state_history(ID, :, 3));
+                case 'z'
+                    history = squeeze(obj.state_history(ID, :, 4));
+                case 'vx'
+                    history = squeeze(obj.state_history(ID, :, 5));
+                case 'vz'
+                    history = squeeze(obj.state_history(ID, :, 6));
+                case 'theta'
+                    history = squeeze(obj.state_history(ID, :, 7));
+                case 'theta_dot'
+                    history = squeeze(obj.state_history(ID, :, 8));
+                case 'commands'
+                    history = squeeze(obj.command_history(ID, :, 2:4));
+                case 'command_times'
+                    history = squeeze(obj.command_history(ID, :, 1));
+                case 'ux'
+                    history = squeeze(obj.command_history(ID, :, 2));
+                case 'utheta'
+                    history = squeeze(obj.command_history(ID, :, 3));
+                case 'uz'
+                    history = squeeze(obj.command_history(ID, :, 4));
+            end
+        end
+        
     end
     
     methods (Access = private)
@@ -315,7 +379,7 @@ classdef Miabots < handle
                 end
                 
                 u_x = (v_left + v_right)/2;
-                u_omega = (v_right - v_left)*pi/(0.1);
+                u_omega = (v_right - v_left)*2*pi/(0.1);
                 
                 if omega < eps
                     theta_out = theta;
@@ -326,7 +390,7 @@ classdef Miabots < handle
                     radius = u_x/u_omega;
                     x_out = x + radius*(sin(theta_out) - sin(theta)) + normrnd(0, noise(1));
                     y_out = y + radius*(cos(theta) - cos(theta_out)) + normrnd(0, noise(2));
-                    theta_out = wrap2pi(theta_out + normrnd(0, noise(4)));
+                    theta_out = wrapToPi(theta_out + normrnd(0, noise(4)));
                 end
                 states_out(i,:) = [x_out y_out z u_x v_z theta_out u_omega];    
             end
