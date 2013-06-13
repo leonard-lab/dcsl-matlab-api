@@ -205,7 +205,7 @@ classdef Miabots < handle
             poses = p.Results.initial_poses;
             obj.n_robots = size(poses, 1);
             obj.states = [poses(:,1:3) zeros(obj.n_robots,2) poses(:,4) zeros(obj.n_robots, 1)];
-            obj.state_history(:, 1, :) = [0 obj.states];
+            obj.state_history(:, 1, :) = [zeros(obj.n_robots,1) obj.states];
             
             obj.sim = p.Results.sim;
             obj.sim_noise = p.Results.sim_noise;
