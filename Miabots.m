@@ -37,7 +37,7 @@ classdef Miabots < handle
     % false to run ROS.
     %
     % 'sim_noise': Length 4 Vector. Default: [0 0 0 0]. Standard deviation
-    % of the random gaussian noise applied to [x y z theta] during
+    % of the random gaussian noise applied to [x y z theta] estimates during
     % simulation.
     %
     % 'Ts': Number. Default: 0.04. Time step for measurement/control
@@ -49,9 +49,13 @@ classdef Miabots < handle
     % PROPERTIES
     %   n_robots - Number of robots to use. Determined by size of
     %   initial_poses given at initialization of object.
-    %   
-    %   state_history - n_robots x n_time_steps x 8 matrix. Format of third
-    %   dimension is [time x y z vx vz theta theta_dot].
+    % 
+    %   state_estimate - n_robotsX7 matrix. Current state estimates of the
+    %   robots. Second dimension is in format [x y z vx vz theta
+    %   theta_dot].
+    % 
+    %   state_estimate_history - n_robots x n_time_steps x 8 matrix. Format
+    %   of third dimension is [time x y z vx vz theta theta_dot].
     %     
     %   command_history - n_robots x n_times_steps x 4 matrix. Format of
     %   third dimension is [time u_x u_theta u_z].
@@ -148,9 +152,10 @@ classdef Miabots < handle
     properties(SetAccess = private)
         n_robots    % Number of robots
         
-        states      % Current states of the robots
         
-        state_history % n_robotsX[t states]Xn_time_steps matrix of the state history of the robots.
+        state_estimates % Current estimates states of the robots
+        
+        state_estimate_history % n_robotsX[t states]Xn_time_steps matrix of the state estimate history of the robots.
         command_history % n_robotsX[t commands]Xn_time_steps matrix of the command input history of the robots.
         
         control_mode % 'velocity' 'waypoint' or 'direct'
@@ -170,8 +175,8 @@ classdef Miabots < handle
         sub         % ROS subscriber for states
         ws          % ros_websocket object
         
-        
-        
+        states      % Current states of the robots in simulation
+        state_history % n_robotsX[t states]Xn_time_steps matrix of the state history of the robots.
     end
     
     methods(Access = public)
@@ -205,7 +210,9 @@ classdef Miabots < handle
             poses = p.Results.initial_poses;
             obj.n_robots = size(poses, 1);
             obj.states = [poses(:,1:3) zeros(obj.n_robots,2) poses(:,4) zeros(obj.n_robots, 1)];
+            obj.state_estimates = obj.states;
             obj.state_history(:, 1, :) = [zeros(obj.n_robots,1) obj.states];
+            obj.state_estimate_history = obj.state_history;
             
             obj.sim = p.Results.sim;
             obj.sim_noise = p.Results.sim_noise;
@@ -271,23 +278,23 @@ classdef Miabots < handle
             
             switch choice
                 case 'states'
-                    history = squeeze(obj.state_history(ID, :, 2:8));
+                    history = squeeze(obj.state_estimate_history(ID, :, 2:8));
                 case 'state_times'
-                    history = squeeze(obj.state_history(ID, :, 1));
+                    history = squeeze(obj.state_estimate_history(ID, :, 1));
                 case 'x'
-                    history = squeeze(obj.state_history(ID, :, 2));
+                    history = squeeze(obj.state_estimate_history(ID, :, 2));
                 case 'y'
-                    history = squeeze(obj.state_history(ID, :, 3));
+                    history = squeeze(obj.state_estimate_history(ID, :, 3));
                 case 'z'
-                    history = squeeze(obj.state_history(ID, :, 4));
+                    history = squeeze(obj.state_estimate_history(ID, :, 4));
                 case 'vx'
-                    history = squeeze(obj.state_history(ID, :, 5));
+                    history = squeeze(obj.state_estimate_history(ID, :, 5));
                 case 'vz'
-                    history = squeeze(obj.state_history(ID, :, 6));
+                    history = squeeze(obj.state_estimate_history(ID, :, 6));
                 case 'theta'
-                    history = squeeze(obj.state_history(ID, :, 7));
+                    history = squeeze(obj.state_estimate_history(ID, :, 7));
                 case 'theta_dot'
-                    history = squeeze(obj.state_history(ID, :, 8));
+                    history = squeeze(obj.state_estimate_history(ID, :, 8));
                 case 'commands'
                     history = squeeze(obj.command_history(ID, :, 2:4));
                 case 'command_times'
@@ -335,19 +342,21 @@ classdef Miabots < handle
              
              for k = 0:t_steps
                  t = k*obj.Ts;
-                 commands = obj.control_law(t, obj.states);
+                 commands = obj.control_law(t, obj.state_estimates);
                  if k == 0
                      obj.command_history(:, 1, :) = [ones(obj.n_robots,1)*t commands];
                  else
                      obj.command_history(:, end+1, :) = [ones(obj.n_robots,1)*t commands];
                  end
-                 obj.states = obj.propagate(obj.states, commands, obj.Ts, obj.sim_noise);
+                 [obj.states obj.state_estimates] = obj.propagate(obj.states, commands, obj.Ts, obj.sim_noise);
                  obj.state_history(:, end+1, :) = [ones(obj.n_robots,1)*t obj.states];
+                 obj.state_estimate_history(:, end+1, :) = [ones(obj.n_robots,1)*t obj.state_estimates];
              end
         end
         
-        function states_out = propagate(obj, states_in, commands_in, dt, noise)
+        function [states_out measurements_out] = propagate(obj, states_in, commands_in, dt, noise)
             states_out = zeros(obj.n_robots, 7);
+            measurements_out = zeros(obj.n_robots, 7);
             for i=1:obj.n_robots
                 eps = 0.001;
                 
@@ -388,11 +397,12 @@ classdef Miabots < handle
                 else
                     theta_out = theta + u_omega*dt;
                     radius = u_x/u_omega;
-                    x_out = x + radius*(sin(theta_out) - sin(theta)) + normrnd(0, noise(1));
-                    y_out = y + radius*(cos(theta) - cos(theta_out)) + normrnd(0, noise(2));
-                    theta_out = wrapToPi(theta_out + normrnd(0, noise(4)));
+                    x_out = x + radius*(sin(theta_out) - sin(theta));
+                    y_out = y + radius*(cos(theta) - cos(theta_out));
+                    theta_out = wrapToPi(theta_out);
                 end
-                states_out(i,:) = [x_out y_out z u_x v_z theta_out u_omega];    
+                states_out(i,:) = [x_out y_out z u_x v_z theta_out u_omega];
+                measurements_out(i, :) = [x_out+normrnd(0, noise(1)) y_out+normrnd(0, noise(2)) z u_x v_z wrapToPi(theta_out + normrnd(0, noise(4))) u_omega];
             end
         end
         
