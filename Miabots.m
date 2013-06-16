@@ -93,7 +93,7 @@ classdef Miabots < handle
     %   start - Begin simulation or connect if necessary and start control
     %   of ROS system.
     %
-    %   stop - Stop robots in ROS simulation. Interrupt timed run or end
+    %   stop - Stop robots in ROS. Interrupt timed run or end
     %   indefinite run. Does not effect MATLAB simulation.
     %
     %   shutdown - Stop robots and close connection to ROS.
