@@ -380,8 +380,8 @@ classdef Miabots < handle
                 u_omega = commands_in(i,2);
                 u_z = commands_in(i,3);
                 
-                v_right = (u_x + u_omega*0.1/(2*pi));
-                v_left = (u_x - u_omega*0.1/(2*pi));
+                v_right = (u_x + u_omega*0.1/(2));
+                v_left = (u_x - u_omega*0.1/(2));
                 
                 if v_right > 1
                     v_right = 1;
@@ -396,7 +396,7 @@ classdef Miabots < handle
                 end
                 
                 u_x = (v_left + v_right)/2;
-                u_omega = (v_right - v_left)*pi/(0.1);
+                u_omega = (v_right - v_left)/(0.1);
                 
                 if abs(omega) < eps
                     theta_out = theta;
