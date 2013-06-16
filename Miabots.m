@@ -320,20 +320,28 @@ classdef Miabots < handle
             obj.sub = Subscriber(obj.ws, 'state_estimate', 'geometry_msgs/PoseArray');
             addlistener(obj.sub, 'OnMessageReceived', @(h,e) obj.callback(h, e));
         end
-        %{
+        
         function obj = callback(obj, ~, e)
-            
+            states_struct = e.data;
+            time = obj.get_time();
+            obj.state_estimates = obj.states_struct2mat(states_struct);
+            obj.state_estimate_history(:, end+1, :) = [ones(obj.n_robots, 1)*time obj.state_estimates];
+            commands = obj.control_law(obj.time, obj.state_estimates);
+            obj.command_history(:, end+1, :) = [ones(obj.n_robots, 1)*time commands];
+            obj.pub.publish(obj.commands_mat2struct(commands));
+        end
+        
+        function states_matrix = states_struct2mat(states_struct)
+            states_matrix = zeros(obj.n_robots, 7);
+            for i=1:obj.n_robots
+                states_matrix(i,:) = [states_struct(i).position.x states_struct(i).position.y states_struct(i).position.z vx vz states_struct(i).orientation.z theta_dot];
+            end
+        end
+        
+        function commands_struct = commands_mat2struct(commands_mat)
             
         end
         
-        function poses_matrix = poses_struct2mat(poses_struct)
-            
-        end
-        
-        function commands_struct = commands_mat2struct(commands_struct)
-            
-        end
-        %}
         
         % Simulation related methods
         
@@ -348,13 +356,13 @@ classdef Miabots < handle
                  else
                      obj.command_history(:, end+1, :) = [ones(obj.n_robots,1)*t commands];
                  end
-                 [obj.states obj.state_estimates] = obj.propagate(obj.states, commands, obj.Ts, obj.sim_noise);
+                 [obj.states, obj.state_estimates] = obj.propagate(obj.states, commands, obj.Ts, obj.sim_noise);
                  obj.state_history(:, end+1, :) = [ones(obj.n_robots,1)*t obj.states];
                  obj.state_estimate_history(:, end+1, :) = [ones(obj.n_robots,1)*t obj.state_estimates];
              end
         end
         
-        function [states_out measurements_out] = propagate(obj, states_in, commands_in, dt, noise)
+        function [states_out, measurements_out] = propagate(obj, states_in, commands_in, dt, noise)
             states_out = zeros(obj.n_robots, 7);
             measurements_out = zeros(obj.n_robots, 7);
             for i=1:obj.n_robots
