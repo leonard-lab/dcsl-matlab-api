@@ -363,7 +363,7 @@ classdef Miabots < handle
             %twists(1:obj.n_robots,1)=struct();
             for i = 1:obj.n_robots
                 linear = struct('x', commands_mat(i,1), 'y', 0, 'z', commands_mat(i, 3));
-                angular = struct('x', 0, 'y', 0, 'z', commands_mat(i, 2), 'w', 0);
+                angular = struct('x', 0, 'y', 0, 'z', commands_mat(i, 2));
                 twists(i) = struct('linear', linear, 'angular', angular);
             end
             commands_struct = struct('twists', twists);
