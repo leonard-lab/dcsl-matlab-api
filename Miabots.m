@@ -174,9 +174,15 @@ classdef Miabots < handle
         pub         % ROS publisher for commands
         sub         % ROS subscriber for states
         ws          % ros_websocket object
+        lh          % Listen handle for subscriber callback
         
         states      % Current states of the robots in simulation
         state_history % n_robotsX[t states]Xn_time_steps matrix of the state history of the robots.
+        
+        start_time
+        
+        last_command
+        first_callback = true
     end
     
     methods(Access = public)
@@ -213,6 +219,7 @@ classdef Miabots < handle
             obj.state_estimates = obj.states;
             obj.state_history(:, 1, :) = [zeros(obj.n_robots,1) obj.states];
             obj.state_estimate_history = obj.state_history;
+            obj.last_command = zeros(obj.n_robots, 3);
             
             obj.sim = p.Results.sim;
             obj.sim_noise = p.Results.sim_noise;
@@ -318,28 +325,40 @@ classdef Miabots < handle
             obj.ws = ros_websocket(obj.URI);
             obj.pub = Publisher(obj.ws, 'cmd_vel_array', 'dcsl_messages/TwistArray');
             obj.sub = Subscriber(obj.ws, 'state_estimate', 'geometry_msgs/PoseArray');
-            addlistener(obj.sub, 'OnMessageReceived', @(h,e) obj.callback(h, e));
+            obj.lh = addlistener(obj.sub, 'OnMessageReceived', @(h,e) obj.callback(h, e));
         end
         
         function obj = callback(obj, ~, e)
             states_struct = e.data;
-            time = obj.get_time();
-            obj.state_estimates = obj.states_struct2mat(states_struct);
+            wall_time = struct('secs', states_struct.header.stamp.secs, 'nsecs', states_struct.header.stamp.nsecs * 10^(-9));
+            if obj.first_callback
+                obj.start_time = wall_time;
+                obj.first_callback = false;
+            end
+            time = (wall_time.secs - obj.start_time.secs) + (wall_time.nsecs + obj.start_time.nsecs);
+            obj.state_estimates = obj.states_struct2mat(states_struct, obj.last_command);
             obj.state_estimate_history(:, end+1, :) = [ones(obj.n_robots, 1)*time obj.state_estimates];
-            commands = obj.control_law(obj.time, obj.state_estimates);
+            commands = obj.control_law(time, obj.state_estimates);
+            obj.last_command = commands;
             obj.command_history(:, end+1, :) = [ones(obj.n_robots, 1)*time commands];
             obj.pub.publish(obj.commands_mat2struct(commands));
         end
         
-        function states_matrix = states_struct2mat(states_struct)
+        function states_matrix = states_struct2mat(obj, states_struct, commands)
             states_matrix = zeros(obj.n_robots, 7);
             for i=1:obj.n_robots
-                states_matrix(i,:) = [states_struct(i).position.x states_struct(i).position.y states_struct(i).position.z vx vz states_struct(i).orientation.z theta_dot];
+                states_matrix(i,:) = [states_struct.poses(i).position.x states_struct.poses(i).position.y states_struct.poses(i).position.z commands(i,1) commands(i,3) states_struct.poses(i).orientation.z commands(i,2)];
             end
         end
         
-        function commands_struct = commands_mat2struct(commands_mat)
-            
+        function commands_struct = commands_mat2struct(obj, commands_mat)
+            %twists(1:obj.n_robots,1)=struct();
+            for i = 1:obj.n_robots
+                linear = struct('x', commands_mat(i,1), 'y', 0, 'z', commands_mat(i, 3));
+                angular = struct('x', 0, 'y', 0, 'z', commands_mat(i, 2), 'w', 0);
+                twists(i) = struct('linear', linear, 'angular', angular);
+            end
+            commands_struct = struct('twists', twists);
         end
         
         
