@@ -181,6 +181,8 @@ classdef Miabots < handle
         
         start_time
         
+        control_on = false
+        
         last_command
         first_callback = true
     end
@@ -230,7 +232,13 @@ classdef Miabots < handle
             obj.control_law = p.Results.control_law;
         end
         
-        function start(obj)
+        function start(obj,varargin)
+            if (length(varargin)>=1 && cell2mat(varargin(1)) == false)
+                obj.control_on = false;
+            elseif (length(varargin)>=1 && cell2mat(varargin(1)) == true)
+                obj.control_on = true;
+            end
+            
             if obj.sim == false
                 obj.setup_ros_connection();
             else
@@ -241,8 +249,6 @@ classdef Miabots < handle
         function stop(obj)
             if obj.sim == false
                 obj.ros_stop();
-            else
-                obj.sim_stop();
             end
         end
         
@@ -253,8 +259,6 @@ classdef Miabots < handle
         function shutdown(obj)
             if obj.sim == false
                 obj.ros_shutdown();
-            else
-                obj.sim_stop();
             end
         end
         
@@ -338,18 +342,30 @@ classdef Miabots < handle
             time = (wall_time.secs - obj.start_time.secs) + (wall_time.nsecs + obj.start_time.nsecs);
             obj.state_estimates = obj.states_struct2mat(states_struct, obj.last_command);
             obj.state_estimate_history(:, end+1, :) = [ones(obj.n_robots, 1)*time obj.state_estimates];
-            commands = obj.control_law(time, obj.state_estimates);
-            obj.last_command = commands;
-            obj.command_history(:, end+1, :) = [ones(obj.n_robots, 1)*time commands];
-            commands_struct = obj.commands_mat2struct(commands);
-            obj.pub.publish(commands_struct);
+            if obj.control_on
+                commands = obj.control_law(time, obj.state_estimates);
+                obj.last_command = commands;
+                obj.command_history(:, end+1, :) = [ones(obj.n_robots, 1)*time commands];
+                commands_struct = obj.commands_mat2struct(commands);
+                obj.pub.publish(commands_struct);
+            end
         end
         
         function ros_shutdown(obj)
+            obj.ros_stop
             obj.sub.unsubscribe
             obj.pub.unadvertise
             delete(obj.lh)
             delete(obj.ws)
+        end
+        
+        function ros_stop(obj)
+            obj.control_on = false;
+            obj.pub.publish(obj.commands_mat2struct(zeros(obj.n_robots, 3)));
+        end
+        
+        function ros_command(obj, command_array)
+            obj.pub.publish(obj.commands_mat2struct(command_array));
         end
         
         function states_matrix = states_struct2mat(obj, states_struct, commands)
