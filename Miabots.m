@@ -181,7 +181,7 @@ classdef Miabots < handle
         
         start_time
         
-        control_on = false
+        control_on = true
         
         last_command
         first_callback = true
@@ -327,7 +327,7 @@ classdef Miabots < handle
         
         function setup_ros_connection(obj)
             obj.ws = ros_websocket(obj.URI);
-            obj.pub = Publisher(obj.ws, 'cmd_vel_array', 'dcsl_messages/TwistArray');
+            obj.pub = Publisher(obj.ws, 'velocity_input', 'dcsl_messages/TwistArray');
             obj.sub = Subscriber(obj.ws, 'state_estimate', 'geometry_msgs/PoseArray');
             obj.lh = event.listener(obj.sub, 'OnMessageReceived', @(h,e) obj.callback(h, e));
         end
