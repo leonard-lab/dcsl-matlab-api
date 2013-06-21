@@ -339,7 +339,7 @@ classdef Miabots < handle
                 obj.start_time = wall_time;
                 obj.first_callback = false;
             end
-            time = (wall_time.secs - obj.start_time.secs) + (wall_time.nsecs + obj.start_time.nsecs);
+            time = (wall_time.secs - obj.start_time.secs) + (wall_time.nsecs - obj.start_time.nsecs);
             obj.state_estimates = obj.states_struct2mat(states_struct, obj.last_command);
             obj.state_estimate_history(:, end+1, :) = [ones(obj.n_robots, 1)*time obj.state_estimates];
             if obj.control_on
@@ -371,7 +371,7 @@ classdef Miabots < handle
         function states_matrix = states_struct2mat(obj, states_struct, commands)
             states_matrix = zeros(obj.n_robots, 7);
             for i=1:obj.n_robots
-                states_matrix(i,:) = [states_struct.states(i).pose.position.x states_struct.states(i).pose.position.y states_struct.states(i).pose.position.z commands(i,1) commands(i,3) states_struct.states(i).pose.orientation.z commands(i,2)];
+                states_matrix(i,:) = [states_struct.states{i}.pose.position.x states_struct.states{i}.pose.position.y states_struct.states{i}.pose.position.z commands(i,1) commands(i,3) states_struct.states{i}.pose.orientation.z commands(i,2)];
             end
         end
         
