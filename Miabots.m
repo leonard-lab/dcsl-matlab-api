@@ -328,7 +328,7 @@ classdef Miabots < handle
         function setup_ros_connection(obj)
             obj.ws = ros_websocket(obj.URI);
             obj.pub = Publisher(obj.ws, 'velocity_input', 'dcsl_messages/TwistArray');
-            obj.sub = Subscriber(obj.ws, 'state_estimate', 'geometry_msgs/PoseArray');
+            obj.sub = Subscriber(obj.ws, 'state_estimate', 'dcsl_messages/StateArray');
             obj.lh = event.listener(obj.sub, 'OnMessageReceived', @(h,e) obj.callback(h, e));
         end
         
@@ -371,7 +371,7 @@ classdef Miabots < handle
         function states_matrix = states_struct2mat(obj, states_struct, commands)
             states_matrix = zeros(obj.n_robots, 7);
             for i=1:obj.n_robots
-                states_matrix(i,:) = [states_struct.poses(i).position.x states_struct.poses(i).position.y states_struct.poses(i).position.z commands(i,1) commands(i,3) states_struct.poses(i).orientation.z commands(i,2)];
+                states_matrix(i,:) = [states_struct.states(i).pose.position.x states_struct.states(i).pose.position.y states_struct.states(i).pose.position.z commands(i,1) commands(i,3) states_struct.states(i).pose.orientation.z commands(i,2)];
             end
         end
         
