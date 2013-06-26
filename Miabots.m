@@ -220,7 +220,6 @@ classdef Miabots < handle
             obj.states = [poses(:,1:3) zeros(obj.n_robots,2) poses(:,4) zeros(obj.n_robots, 1)];
             obj.state_estimates = obj.states;
             obj.state_history(:, 1, :) = [zeros(obj.n_robots,1) obj.states];
-            obj.state_estimate_history = obj.state_history;
             obj.last_command = zeros(obj.n_robots, 3);
             
             obj.sim = p.Results.sim;
@@ -390,7 +389,7 @@ classdef Miabots < handle
         
         function run_simulation(obj)
              t_steps = ceil(obj.run_time/obj.Ts);
-             
+             obj.state_estimate_history(:, end+1, :) = [zeros(obj.n_robots,1) obj.state_estimates];
              for k = 0:t_steps
                  t = k*obj.Ts;
                  commands = obj.control_law(t, obj.state_estimates);
