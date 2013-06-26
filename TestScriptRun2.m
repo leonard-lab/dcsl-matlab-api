@@ -1,6 +1,6 @@
 clear m
 initial_poses = [-0.5 0 0 0; 0 0 0 0];
-runtime = pi*5;
+runtime = pi*10;
 noise = [0.01, 0.01, 0, 0.01];
 m = Miabots(initial_poses, @TestControlLaw, 'velocity', runtime, 'sim', false);
 m.start
