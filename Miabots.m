@@ -370,7 +370,7 @@ classdef Miabots < handle
         function states_matrix = states_struct2mat(obj, states_struct, commands)
             states_matrix = zeros(obj.n_robots, 7);
             for i=1:obj.n_robots
-                states_matrix(i,:) = [states_struct.states{i}.pose.position.x states_struct.states{i}.pose.position.y states_struct.states{i}.pose.position.z commands(i,1) commands(i,3) states_struct.states{i}.pose.orientation.z commands(i,2)];
+                states_matrix(i,:) = [states_struct.states(i).pose.position.x states_struct.states(i).pose.position.y states_struct.states(i).pose.position.z commands(i,1) commands(i,3) states_struct.states(i).pose.orientation.z commands(i,2)];
             end
         end
         
