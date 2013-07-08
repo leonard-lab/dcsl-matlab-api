@@ -408,6 +408,10 @@ classdef Miabots < handle
             states_out = zeros(obj.n_robots, 7);
             measurements_out = zeros(obj.n_robots, 7);
             for i=1:obj.n_robots
+                diffConversionFactor = 0.0667;
+                motorScaleFactor = 501;
+                max_motor_speed = 1000;
+                
                 eps = 0.001;
                 
                 x = states_in(i,1);
@@ -422,25 +426,25 @@ classdef Miabots < handle
                 u_omega = commands_in(i,2);
                 u_z = commands_in(i,3);
                 
-                v_right = (u_x + u_omega*0.1/(2));
-                v_left = (u_x - u_omega*0.1/(2));
+                v_right = (u_x + u_omega*diffConversionFactor/(2))*motorScaleFactor;
+                v_left = (u_x - u_omega*diffConversionFactor/(2))*motorScaleFactor;
                 
-                if v_right > 1
-                    v_right = 1;
-                elseif v_right < -1
-                    v_right = -1;
+                if v_right > max_motor_speed
+                    v_right = max_motor_speed;
+                elseif v_right < -max_motor_speed
+                    v_right = -max_motor_speed;
                 end
                 
-                if v_left > 1
-                    v_left = 1;
-                elseif v_left < -1
-                    v_left = -1;
+                if v_left > max_motor_speed
+                    v_left = max_motor_speed;
+                elseif v_left < -max_motor_speed
+                    v_left = -max_motor_speed;
                 end
                 
-                u_x = (v_left + v_right)/2;
-                u_omega = (v_right - v_left)/(0.1);
+                u_x = ((v_left + v_right)/2)/motorScaleFactor;
+                u_omega = (v_right - v_left)/(diffConversionFactor*motorScaleFactor);
                 
-                if abs(omega) < eps
+                if abs(u_omega) < eps
                     theta_out = theta;
                     x_out = x + u_x*dt*cos(theta);
                     y_out = y + u_x*dt*sin(theta);
