@@ -202,7 +202,7 @@ classdef Miabots < handle
             defaultURI = 'ws://localhost:9090';
             defaultNoise = [0, 0, 0, 0];
             expected_control_modes = {'velocity', 'waypoint', 'direct'};
-            defaultMeasureDT = 1/25;
+            defaultMeasureDT = 1/15;
             
             addRequired(p, 'initial_poses', @(x) ismatrix(x) && isnumeric(x) && (size(x, 2)==4));
             addRequired(p, 'control_law', @(x) isa(x,'function_handle'))
