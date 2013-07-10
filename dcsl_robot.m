@@ -100,7 +100,7 @@ classdef (Abstract) dcsl_robot < handle
             addRequired(p, 'initial_poses', @(x) ismatrix(x) && isnumeric(x) && (size(x, 2)==4));
             addRequired(p, 'control_law', @(x) isa(x,'function_handle'))
             addRequired(p, 'control_mode', @(x) any(validatestring(x, expected_control_modes)));
-            addRequired(p, 'run_time', @isnumeric);
+            addRequired(p, 'run_time', @(x) isnumeric(x) && x >= 0);
             addOptional(p, 'sim', defaultSim, @islogical);
             addOptional(p, 'uri', defaultURI, @ischar);
             addOptional(p, 'sim_noise', defaultNoise, @(x) ismatrix(x) && (length(x)==4));
@@ -218,6 +218,8 @@ classdef (Abstract) dcsl_robot < handle
             end
            
         end
+        
+        % Methods for properties access
         
         function history = get_history(obj, robot_ID, option) % Need to add support for waypoint history/maybe make this robot dependent
             % GET_HISTORY Returns the indicated time history for the
@@ -442,6 +444,7 @@ classdef (Abstract) dcsl_robot < handle
             eps = 0.01;
             
             % Find error
+            error = 0;
             for i=1:obj.n_robots
                 x_e = (poses(i,1) - obj.state_estimates(i,1))^2;
                 y_e = (poses(i,2) - obj.state_estimates(i,2))^2;
