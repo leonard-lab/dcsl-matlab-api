@@ -143,7 +143,7 @@ classdef (Abstract) dcsl_robot < handle
         end
         
         function stop(obj)
-            % STOP Sets all input signals to zero for all robots. Has no effect on simulation.
+            % STOP Turns off control and sets all input signals to zero for all robots. Has no effect on simulation.
             %
             % SYNOPSIS stop(obj)
             % 
@@ -297,27 +297,265 @@ classdef (Abstract) dcsl_robot < handle
         
     end
     
+    methods (Access = private)
+        
+        % ROS interaction functions
+        
+        function setup_ros_connection(obj)
+            % SETUP_ROS_CONNECTION Setup ros_websocket, create pubs/subs,
+            % connect listener handle to subscriber
+            %
+            % SYNOPSIS setup_ros_connection(obj)
+            %
+            % INPUT obj: the object
+            %
+            % OUTPUT none
+            
+            % Create websocket object to connect to ROS
+            obj.ws = ros_websocket(obj.URI);
+            
+            % Initialize publisher objects
+            obj.vel_pub = Publisher(obj.ws, 'velocity_input', 'dcsl_messages/TwistArray');
+            obj.wp_pub = Publisher(obj.ws, 'waypoint_input', 'geometry_msgs/PoseArray');
+            obj.direct_pub = obj.setup_direct_pub(obj.ws);
+            
+            % Initialize subscriber object
+            obj.sub = Subscriber(obj.ws, 'state_estimate', 'dcsl_messages/StateArray');
+            
+            % Use listener handle to connect callback method to execute
+            % when subscriber receives a message
+            obj.lh = event.listener(obj.sub, 'OnMessageReceived', @(h,e) obj.callback(h, e));
+            
+        end
+        
+        function obj = callback(obj, ~, e)
+            % CALLBACK Envoked on receipt of state estimate. Records data
+            % and sends proper control input back to ROS if enabled.
+            %
+            % SYNOPSIS [obj] = callback(obj, ~, e)
+            %
+            % INPUTS obj: the object
+            % ~: placeholder for event handle
+            % e: event data sent to callback function on event trigger
+            %
+            % OUTPUT obj: the object
+            
+            % Receive state data from the event data
+            states_struct = e.data;
+            
+            % Calculate time past since first state_estimate received from
+            % system
+            wall_time = struct('secs', states_struct.header.stamp.secs, 'nsecs', states_struct.header.stamp.nsecs * 10^(-9));
+            if obj.first_callback
+                obj.start_time = wall_time;
+                obj.first_callback = false;
+            end
+            time = (wall_time.secs - obj.start_time.secs) + (wall_time.nsecs - obj.start_time.nsecs);
+            
+            % Record state estimates into memory and history
+            obj.state_estimates = obj.states_struct2mat(states_struct, obj.last_command);
+            obj.state_estimate_history(:, end+1, :) = [ones(obj.n_robots, 1)*time obj.state_estimates];
+            
+            % Execute closed loop control if enabled
+            if obj.control_on
+                % Get commands from control law
+                commands = obj.control_law(time, obj.state_estimates);
+                
+                % Record commands into memory and history
+                obj.last_command = commands;
+                obj.command_history(:, end+1, :) = [ones(obj.n_robots, 1)*time commands];
+                
+                % Execute commands
+                obj.ros_command(commands);
+            end
+        end
+        
+        function ros_shutdown(obj)
+            % ROS_SHUTDOWN Sends stop commands to all robots and closes
+            % connection to ROS.
+            %
+            % SYNOPSIS ros_shutdown(obj)
+            %
+            % INPUT obj: the object
+            %
+            % OUTPUT none
+            
+            obj.ros_stop
+            obj.sub.unsubscribe
+            obj.vel_pub.unadvertise
+            obj.wp_pub.unadvertise
+            obj.dir_pub.undvertise
+            delete(obj.lh)
+            delete(obj.ws)
+        end
+        
+        function ros_command(obj, command_array)
+            % ROS_COMMAND Publish supplied command. Adhear to the active
+            % control strategy. 
+            %
+            % SYNOPSIS ros_command(obj, command_array)
+            %
+            % INPUTS obj: the object
+            % command_array: an n_robots X M inputs array formatted as
+            % described in control law description.
+            %
+            % OUTPUT none
+            
+            % Convert commands to appropriate struct and publish
+            switch obj.control_mode
+                case 'velocity'
+                    commands_struct = obj.commands_mat2vel_struct(command_array);
+                    obj.vel_pub.publish(commands_struct);
+                case 'waypoint'
+                    commands_struct = obj.commands_mat2wp_struct(command_array);
+                    obj.wp_pub.publish(commands_struct);
+                case 'direct'
+                    commands_struct = obj.commands_mat2dir_struct(command_array);
+                    obj.dir_pub.publish(commands_struct);
+            end
+        end
+        
+        function [commands_struct] = commands_mat2vel_struct(obj, commands_mat)
+            % COMMANDS_MAT2VEL_STRUCT Converts commands matrix to a
+            % structure formatted as a TwistArray ROS message
+            %
+            % SYNOPSIS [commands_struct] = commands_mat2vel_struct(obj, commands_mat)
+            %
+            % INPUTS obj: the object
+            % commands_matrix: a n_robots X 3 matrix where the second
+            % dimension is formatted as [u_x_dot u_theta_dot u_z_dot]
+            %
+            % OUTPUT commands_struct: a struct formatted as a TwistArray
+            % ROS message (defined in the dcsl_messages package) containing
+            % the commands from commands_mat
+            
+            % Initialize array of structs
+            twists = repmat(struct('linear', {}, 'angular', {}), obj.n_robots, 1);
+            
+            % Populate structs
+            for i = 1:obj.n_robots
+                twists(i).linear = struct('x', commands_mat(i,1), 'y', 0, 'z', commands_mat(i, 3));
+                twists(i).angular = struct('x', 0, 'y', 0, 'z', commands_mat(i, 2));
+            end
+            
+            % Add array of structs to a struct with one property called
+            % twists
+            commands_struct = struct('twists', twists);
+        end
+        
+        function [commands_struct] = commands_mat2wp_struct(obj, commands_mat)
+            % COMMANDS_MAT2WP_STRUCT Converts commands matrix to a
+            % structure formatted as a PoseArray ROS message
+            %
+            % SYNOPSIS [commands_struct] = commands_mat2wp_struct(obj, commands_mat)
+            %
+            % INPUTS obj: the object
+            % commands_matrix: a n_robots X 4 matrix where the second
+            % dimension is formatted as [x_goal y_goal z_goal theta_goal]
+            %
+            % OUTPUT commands_struct: a struct formatted as a PoseArray
+            % ROS message (defined in the geometry_msgs package) containing
+            % the goal poses from commands_mat
+            
+            % Initialize array of structs
+            poses = repmat(struct('position', {}, 'orientation', {}), obj.n_robots, 1);
+            
+            % Populate structs
+            for i = 1:obj.n_robots
+                poses(i).position = struct('x', commands_mat(i,1), 'y', commands_mat(i, 2), 'z', commands_mat(i, 3));
+                poses(i).orientation = struct('x', 0, 'y', 0, 'z', commands_mat(i, 4), 'w', 0);
+            end
+            
+            % Add array of structs to a struct with one property called
+            % poses
+            commands_struct = struct('poses', poses);
+        end
+        
+        function states_matrix = states_struct2mat(obj, states_struct)
+            % STATES_STRUCT2MAT Convert the received states struct to a
+            % matrix.
+            %
+            % SYNOPSIS [states_matrix] = states_struct2mat(obj,
+            % states_struct)
+            %
+            % INPUTS obj: the object
+            % states_struct: a structure formatted as a StateArray ROS
+            % messages (from dcsl_messages package)
+            %
+            % OUTPUT: states_matrix a n_robots X 7 matrix with the second
+            % dimenstion formatted as [x y z x_dot z_dot theta theta_dot]
+            
+            states_matrix = zeros(obj.n_robots, 7);
+            for i=1:obj.n_robots
+                states_matrix(i,:) = [states_struct.states(i).pose.position.x states_struct.states(i).pose.position.y states_struct.states(i).pose.position.z states_struct.states(i).twist.linear.x states_struct.states(i).twist.linear.z states_struct.states(i).pose.orientation.z states_struct.states(i).twist.angular.z];
+            end
+        end
+        
+        % Simulation methods
+        
+        function run_simulation(obj)
+            % RUN_SIMULATION Simulate behavior in MATLAB of robot under
+            % control law.
+            %
+            % SYNOPSIS run_simulation(obj)
+            %
+            % INPUT obj: the object
+            %
+            % OUTPUT none
+            
+            % Calculate the number of time steps to reach run time
+            t_steps = ceil(obj.run_time/obj.Ts);
+            
+            % Record state_estimate at t = 0
+            obj.state_estimate_history(:, end+1, :) = [zeros(obj.n_robots,1) obj.state_estimates];
+            
+            for k = 0:t_steps
+                
+                % Calculate current time
+                t = k*obj.Ts;
+                
+                % Calculate control inputs and record
+                commands = obj.control_law(t, obj.state_estimates);
+                obj.command_history(:, end+1, :) = [ones(obj.n_robots,1)*t commands];
+            
+                % Propagate states and record into history
+                [obj.states, obj.state_estimates] = obj.propagate(obj.states, commands, obj.Ts, obj.sim_noise);
+                obj.state_estimate_history(:, end+1, :) = [ones(obj.n_robots,1)*(t+obj.Ts) obj.state_estimates];
+            end
+        end
+        
+    end
+    
     methods (Abstract)
         
-        % Setup ros_websocket, create pubs/subs, connect listener handle
-        setup_ros_connection(obj) 
+        % Return a publisher object for the robot's direct inputs, given...
+        % a ros_websocket object
+        [direct_pub] = setup_direct_pub(obj, ros_websocket) 
         
-        % Stop all robots and close connection to ROS
-        ros_shutdown(obj) 
+        % Return a struct formatted for the correct ROS message type for...
+        % direct control of robot given an n_robots X M inputs matrix
+        [commands_struct] = commands_mat2dir_struct(obj, commands_mat)
         
         % Stop all robots
-        ros_stop(obj) 
+        ros_stop(obj)
         
-        % Publish supplied command. Adhear to the active control...
-        % strategy. Command array should be as defined in control law
-        % description. 
-        ros_command(obj, command_array)
-        
-        % Simulate behavior of robots under current control strategy...
-        % for given runtime. Save state_estimate_history and
-        % command_history.
-        run_simulation(obj) % Consider implementing this here and making propagate the abstract method.
-       
+        % Propagate forward in simulation the state of the robot for the...
+        % given time step, given the current state, and commands. Return
+        % the states at the end of the time step and the states plus the
+        % measurement noise as the state_estimates. This should account for
+        % the current control_mode setting.
+        %
+        % INPUTS obj: the object
+        % states: an n_robots X M states array containing the current true
+        % states (no noise added) of the robots
+        % commands: an n_robots X M inputs array containing the input
+        % commands (in the correct format for the control mode) to be
+        % applied for the duration of the time step.
+        % Ts: the measurement time step in seconds
+        % sim_noise: a vector containing the standard deviation of gaussian
+        % noise to be applied to the states to yield the state estimate.
+        % Typically in the format [x_noise y_noise z_noise theta_noise].
+        [states, state_estimates] = propagate(obj, states, commands, Ts, sim_noise)
         
         
     end
