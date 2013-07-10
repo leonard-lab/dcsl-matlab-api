@@ -415,6 +415,78 @@ classdef (Abstract) dcsl_robot < handle
             end
         end
         
+        function [succeeded] = ros_go_to_poses(obj, poses, timeout)
+            % ROS_GO_TO_POSES
+            %
+            % SYNOPSIS
+            %
+            % INPUTS
+            %
+            % OUTPUT
+            
+            % Save active control mode and control law so they can be put
+            % back in place after going to pose
+            active_ctrl_mode = obj.control_mode;
+            active_ctrl_state = obj.control_on;
+            
+            % Turn control off and switch to waypoint
+            obj.control_on = false;
+            obj.control_mode = 'waypoint';
+            
+            time_step = 1/10;
+            eps = 0.01;
+            
+            % Find error
+            for i=1:obj.n_robots
+                x_e = (poses(i,1) - obj.state_estimates(i,1))^2;
+                y_e = (poses(i,2) - obj.state_estimates(i,2))^2;
+                z_e = (poses(i,3) - obj.state_estimates(i,3))^2;
+                theta_e = (poses(i,4) - obj.state_estimate(i,6))^2;
+                error = error + x_e + y_e + z_e + theta_e;
+            end
+           
+            time = 0;
+            
+            
+            % Do control to direct robots to points
+            while error > eps && timeout < time
+                % Direct robots to poses
+                obj.ros_command(poses);
+                
+                % Wait for time_step
+                pause(time_step)
+                drawnow(); % Process event queue
+                
+                %Calculate error
+                error = 0;
+                for i=1:obj.n_robots
+                    x_e = (poses(i,1) - obj.state_estimates(i,1))^2;
+                    y_e = (poses(i,2) - obj.state_estimates(i,2))^2;
+                    z_e = (poses(i,3) - obj.state_estimates(i,3))^2;
+                    theta_e = (poses(i,4) - obj.state_estimate(i,6))^2;
+                    error = error + x_e + y_e + z_e + theta_e;
+                end
+                
+                time = time + time_step; % Consider switch to timing functions.
+            end
+                
+            % Stop robots
+            obj.ros_stop();
+            
+            % Set control mode back
+            obj.control_mode = active_ctrl_mode;
+            obj.control_on = active_ctrl_state;
+            
+            if error < eps
+                succeeded = true;
+            else
+                succeeded = false;
+                warning('Poses not reached before timeout in ros_go_to_poses method.');
+            end
+            
+            
+        end
+        
         function [commands_struct] = commands_mat2vel_struct(obj, commands_mat)
             % COMMANDS_MAT2VEL_STRUCT Converts commands matrix to a
             % structure formatted as a TwistArray ROS message
@@ -522,6 +594,22 @@ classdef (Abstract) dcsl_robot < handle
                 [obj.states, obj.state_estimates] = obj.propagate(obj.states, commands, obj.Ts, obj.sim_noise);
                 obj.state_estimate_history(:, end+1, :) = [ones(obj.n_robots,1)*(t+obj.Ts) obj.state_estimates];
             end
+        end
+        
+        function sim_go_to_poses(obj, poses)
+            % SIM_GO_TO_POSES Sets the current states and state estimates
+            % of the robots to the poses with zero velocities.
+            %
+            % SYNOPSIS sim_go_to_poses(obj, poses)
+            % 
+            % INPUTS obj: the object
+            % poses: an n_robots X 4 matrixs with the second dimension the
+            % goal pose for the robot in the format [x y z theta]
+            %
+            % OUTPUT none
+            
+            obj.states = [poses(:, 1) poses(:,2) poses(:,3) zeros(obj.n_robots, 1) zeros(obj.n_robots,1) poses(:,4) zeros(obj.n_robots,4)];
+            obj.state_estimate_history = obj.states;
         end
         
     end
