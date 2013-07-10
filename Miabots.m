@@ -157,7 +157,7 @@ classdef Miabots < dcsl_robot
         
         function obj = Miabots(initial_poses, control_law, control_mode, run_time, varargin )
             % Inherit from superclass 
-            obj = obj@dcsl_robot(initial_poses, control_law, control_mode, run_time, varargin);
+            obj = obj@dcsl_robot(initial_poses, control_law, control_mode, run_time, varargin{:});
         end
         
     end
