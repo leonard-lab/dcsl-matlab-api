@@ -420,9 +420,14 @@ classdef (Abstract) dcsl_robot < handle
             %
             % SYNOPSIS
             %
-            % INPUTS
+            % INPUTS obj: the object
+            % poses: an n_robots X 4 matrix with the desired poses as the
+            % second dimension in the format [x y z theta]
+            % timeout: time in seconds to allow the robots to reach the
+            % goal poses
             %
-            % OUTPUT
+            % OUTPUT succeeded: a logical. true = goal poses reached, false
+            % otherwise
             
             % Save active control mode and control law so they can be put
             % back in place after going to pose
@@ -483,8 +488,7 @@ classdef (Abstract) dcsl_robot < handle
                 succeeded = false;
                 warning('Poses not reached before timeout in ros_go_to_poses method.');
             end
-            
-            
+               
         end
         
         function [commands_struct] = commands_mat2vel_struct(obj, commands_mat)
