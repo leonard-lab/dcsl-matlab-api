@@ -19,6 +19,7 @@ classdef (Abstract) dcsl_robot < handle
         
         sim_noise   % Noise to apply to sensor output of simulation
        
+        connected = false  % Logical, True = connected to ROS, false otherwise
         URI         % URI address for rosbridge server
     end
     
@@ -34,7 +35,7 @@ classdef (Abstract) dcsl_robot < handle
         
         start_time  % ROS walltime at the start of the run
         
-        control_on = true % Indicator whether to actively apply the control law
+        control_on = false % Indicator whether to actively apply the control law
         
         last_command % To retain in memory the previously applied command
         first_callback = true % Indicator for initialization during callback
@@ -125,6 +126,13 @@ classdef (Abstract) dcsl_robot < handle
             obj.control_law = p.Results.control_law;
         end
         
+        function connect(obj)
+            % 
+            
+            
+        end
+            
+        
         function start(obj)
             % START Begin the simulation or setup connections to ROS. If control is on, commands will begin being sent to ROS.
             %
@@ -133,9 +141,23 @@ classdef (Abstract) dcsl_robot < handle
             % INPUT obj: the object
             %
             % OUTPUT none
-            
+          
             if obj.sim == false
+                % Turn control off and setup ROS connection.
+                obj.control_on = false;
                 obj.setup_ros_connection();
+                
+                % Go to initial poses
+                reached_poses = obj.go_to_poses(initial_poses);
+                
+                if reached_poses
+                    % Clear history and start control.
+                    obj.reset_history();
+                    obj.reset_time();
+                    obj.control_on = true;
+                else
+                    disp('Initial poses not reached. Try running start again.');
+                end
             else
                 obj.run_simulation();
             end
@@ -297,6 +319,10 @@ classdef (Abstract) dcsl_robot < handle
             obj.command_history = [];   
         end
         
+        function reset_time(obj)
+            obj.first_callback = true;
+        end
+        
     end
     
     methods (Access = private)
@@ -313,20 +339,25 @@ classdef (Abstract) dcsl_robot < handle
             %
             % OUTPUT none
             
-            % Create websocket object to connect to ROS
-            obj.ws = ros_websocket(obj.URI);
-            
-            % Initialize publisher objects
-            obj.vel_pub = Publisher(obj.ws, 'velocity_input', 'dcsl_messages/TwistArray');
-            obj.wp_pub = Publisher(obj.ws, 'waypoint_input', 'geometry_msgs/PoseArray');
-            obj.direct_pub = obj.setup_direct_pub(obj.ws);
-            
-            % Initialize subscriber object
-            obj.sub = Subscriber(obj.ws, 'state_estimate', 'dcsl_messages/StateArray');
-            
-            % Use listener handle to connect callback method to execute
-            % when subscriber receives a message
-            obj.lh = event.listener(obj.sub, 'OnMessageReceived', @(h,e) obj.callback(h, e));
+            if obj.connected = false
+                % Create websocket object to connect to ROS
+                obj.ws = ros_websocket(obj.URI);
+                
+                % Initialize publisher objects
+                obj.vel_pub = Publisher(obj.ws, 'velocity_input', 'dcsl_messages/TwistArray');
+                obj.wp_pub = Publisher(obj.ws, 'waypoint_input', 'geometry_msgs/PoseArray');
+                obj.direct_pub = obj.setup_direct_pub(obj.ws);
+                
+                % Initialize subscriber object
+                obj.sub = Subscriber(obj.ws, 'state_estimate', 'dcsl_messages/StateArray');
+                
+                % Use listener handle to connect callback method to execute
+                % when subscriber receives a message
+                obj.lh = event.listener(obj.sub, 'OnMessageReceived', @(h,e) obj.callback(h, e));
+                
+                % Indicate that ROS connection is active
+                obj.connected = true;
+            end
             
         end
         
@@ -353,6 +384,11 @@ classdef (Abstract) dcsl_robot < handle
                 obj.first_callback = false;
             end
             time = (wall_time.secs - obj.start_time.secs) + (wall_time.nsecs - obj.start_time.nsecs);
+            
+            if time > obj.run_time
+                obj.control_on = false;
+                obj.stop();
+            end
             
             % Record state estimates into memory and history
             obj.state_estimates = obj.states_struct2mat(states_struct, obj.last_command);
