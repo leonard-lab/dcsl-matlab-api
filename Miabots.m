@@ -150,10 +150,11 @@ classdef Miabots < dcsl_robot
     %   POSSIBILITY OF SUCH DAMAGE.
     
     properties
-       
+       wp_k1 = 1.0; % Control constant for velocity feedback in waypoint controller
+       wp_k2 = 0.5; % Control constant for angular feedback in waypoint controller
     end
     
-    methods(Access = public)
+    methods (Access = public)
         
         function obj = Miabots(initial_poses, control_law, control_mode, run_time, varargin )
             % Inherit from superclass 
@@ -214,7 +215,7 @@ classdef Miabots < dcsl_robot
                         u_omega = commands_in(i,2);
                         u_z = commands_in(i,3);
                     case 'waypoint'
-                        [u_x, u_omega, u_z] = obj.wp_law(states_in, commands_in);
+                        [u_x, u_omega, u_z] = obj.wp_law(states_in(i,:), commands_in(i,:));
                 end
                 
                 v_right = (u_x + u_omega*diffConversionFactor/(2))*motorScaleFactor;
@@ -251,9 +252,26 @@ classdef Miabots < dcsl_robot
             end
         end
         
-        function [ux, utheta, uz] = wp_law(obj, states, waypoints)
+        function [ux, utheta, uz] = wp_law(obj, state, waypoint)
             %
             
+            % Find phi, the angle from the heading of the robot to the
+            % heading from the robot to the waypoint.
+            phi = wrapToPi(atan2(waypoint(2)-state(2), waypoint(1)-state(1)) - state(6));
+            
+            
+            if phi <= pi/2 && phi > -pi/2
+                utheta = obj.wp_k2*sin(phi);
+            else
+                utheta = -obj.wp_k2*sin(phi);
+            end
+            
+            % Find distance to waypoint
+            r = (waypoint(1) - state(1))^2 + (waypoint(2) - state(2))^2;
+            
+            ux = obj.wp_k1*r*cos(phi);
+            
+            uz = 0;
         end
         
     end
