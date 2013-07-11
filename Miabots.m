@@ -259,17 +259,23 @@ classdef Miabots < dcsl_robot
             % heading from the robot to the waypoint.
             phi = wrapToPi(atan2(waypoint(2)-state(2), waypoint(1)-state(1)) - state(6));
             
-            
-            if phi <= pi/2 && phi > -pi/2
-                utheta = obj.wp_k2*sin(phi);
-            else
-                utheta = -obj.wp_k2*sin(phi);
-            end
-            
             % Find distance to waypoint
             r = (waypoint(1) - state(1))^2 + (waypoint(2) - state(2))^2;
             
+            % Calculate control
             ux = obj.wp_k1*r*cos(phi);
+            
+            min_dist = 0.02;
+            
+            if r > min_dist % When not close to waypoint go toward waypoint
+                if phi <= pi/2 && phi > -pi/2
+                    utheta = obj.wp_k2*sin(phi);
+                else
+                    utheta = -obj.wp_k2*sin(phi);
+                end
+            else % When close, turn to desired heading
+                utheta = -obj.wp_k2*sin(state(6) - waypoint(4));
+            end
             
             uz = 0;
         end
