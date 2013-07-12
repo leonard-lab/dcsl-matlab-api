@@ -2,6 +2,10 @@ classdef (Abstract) dcsl_robot < handle
     %UNTITLED2 Summary of this class goes here
     %   Detailed explanation goes here
     
+    properties(Access = public)
+        control_mode % 'velocity' 'waypoint' or 'direct'
+    end
+    
     properties(SetAccess = private)
         n_robots % Number of robots
         
@@ -10,7 +14,6 @@ classdef (Abstract) dcsl_robot < handle
         state_estimate_history % n_robotsX[t states]Xn_time_steps matrix of the state estimate history of the robots.
         command_history % n_robotsX[t commands]Xn_time_steps matrix of the command input history of the robots.
         
-        control_mode % 'velocity' 'waypoint' or 'direct'
         control_law % Handle to the user provided control law.
         
         Ts          % Frequency of pose updates during simulation
@@ -40,6 +43,18 @@ classdef (Abstract) dcsl_robot < handle
         
         last_command % To retain in memory the previously applied command
         first_callback = true % Indicator for initialization during callback
+    end
+    
+    methods
+        function set.control_mode(obj, value)
+            %
+            
+            if any(strcmpi(value, {'velocity', 'direct', 'waypoint'}))
+                obj.control_mode = value;
+            else
+                error('control_mode must be "velocity" "direct" or "waypoint"')
+            end
+        end
     end
     
     methods(Access = public)
@@ -198,6 +213,21 @@ classdef (Abstract) dcsl_robot < handle
             if obj.sim == false
                 obj.ros_shutdown();
             end
+        end
+        
+        function enable_control(obj)
+            % 
+            
+            if obj.sim == false
+                obj.control_on = true;
+                obj.start_ros_control();
+            end
+        end
+        
+        function disable_control(obj)
+            %
+            
+            obj.control_on = false;
         end
         
         function command(obj, command_array)
@@ -378,6 +408,7 @@ classdef (Abstract) dcsl_robot < handle
         
         end
         
+        
         function obj = control_callback(obj, ~, e)
             % CALLBACK Envoked on receipt of state estimate. Records data
             % and sends proper control input back to ROS if enabled.
@@ -402,10 +433,7 @@ classdef (Abstract) dcsl_robot < handle
             end
             time = (wall_time.secs - obj.start_time.secs) + (wall_time.nsecs - obj.start_time.nsecs);
             
-            if time > obj.run_time
-                obj.control_on = false;
-                obj.stop();
-            end
+            
             
             % Record state estimates into memory and history
             obj.state_estimates = obj.states_struct2mat(states_struct);
@@ -421,7 +449,12 @@ classdef (Abstract) dcsl_robot < handle
                 obj.command_history(:, end+1, :) = [ones(obj.n_robots, 1)*time commands];
                 
                 % Execute commands
-                obj.ros_command(commands);
+                if time > obj.run_time
+                    obj.control_on = false;
+                    obj.stop();
+                else
+                    obj.ros_command(commands);
+                end
             end
         end
         
