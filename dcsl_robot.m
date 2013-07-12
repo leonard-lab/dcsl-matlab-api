@@ -23,7 +23,7 @@ classdef (Abstract) dcsl_robot < handle
         URI         % URI address for rosbridge server
     end
     
-    properties(Access = private)
+    properties(Access = protected)
         vel_pub     % ROS publisher for velocity commands
         wp_pub      % ROS publisher for waypoint commands
         direct_pub  % ROS published for direct commands to robot
@@ -34,6 +34,7 @@ classdef (Abstract) dcsl_robot < handle
         states      % Current state of the robots, used for simulation
         
         start_time  % ROS walltime at the start of the run
+        initial_poses % Positions and headings to start the robots at.
         
         control_on = false % Indicator whether to actively apply the control law
         
@@ -113,8 +114,9 @@ classdef (Abstract) dcsl_robot < handle
             % Assign args to properties
             poses = p.Results.initial_poses;
             obj.n_robots = size(poses, 1);
+            obj.initial_poses = poses;
             obj.states = [poses(:,1:3) zeros(obj.n_robots,2) poses(:,4) zeros(obj.n_robots, 1)];
-            obj.state_estimates = obj.states;
+            % obj.state_estimates = obj.states;
             obj.last_command = zeros(obj.n_robots, 3);
             
             obj.sim = p.Results.sim;
@@ -128,7 +130,9 @@ classdef (Abstract) dcsl_robot < handle
         
         function connect(obj)
             % 
-            
+            if obj.connected == false
+                obj.setup_ros_connection();
+            end
             
         end
             
@@ -145,19 +149,23 @@ classdef (Abstract) dcsl_robot < handle
             if obj.sim == false
                 % Turn control off and setup ROS connection.
                 obj.control_on = false;
-                obj.setup_ros_connection();
+                obj.connect();
                 
                 % Go to initial poses
-                reached_poses = obj.go_to_poses(initial_poses);
+                reached_poses = obj.go_to_poses(obj.initial_poses);
                 
                 if reached_poses
                     % Clear history and start control.
                     obj.reset_history();
                     obj.reset_time();
                     obj.control_on = true;
+                    obj.start_ros_control();
+                    disp('Initial poses reached. Starting control...')
                 else
                     disp('Initial poses not reached. Try running start again.');
                 end
+                
+                
             else
                 obj.run_simulation();
             end
@@ -325,7 +333,7 @@ classdef (Abstract) dcsl_robot < handle
         
     end
     
-    methods (Access = private)
+    methods (Access = protected)
         
         % ROS interaction functions
         
@@ -339,7 +347,7 @@ classdef (Abstract) dcsl_robot < handle
             %
             % OUTPUT none
             
-            if obj.connected = false
+            if obj.connected == false
                 % Create websocket object to connect to ROS
                 obj.ws = ros_websocket(obj.URI);
                 
@@ -353,7 +361,7 @@ classdef (Abstract) dcsl_robot < handle
                 
                 % Use listener handle to connect callback method to execute
                 % when subscriber receives a message
-                obj.lh = event.listener(obj.sub, 'OnMessageReceived', @(h,e) obj.callback(h, e));
+                % obj.lh = event.listener(obj.sub, 'OnMessageReceived', @(h,e) obj.control_callback(h, e));
                 
                 % Indicate that ROS connection is active
                 obj.connected = true;
@@ -361,7 +369,16 @@ classdef (Abstract) dcsl_robot < handle
             
         end
         
-        function obj = callback(obj, ~, e)
+        function start_ros_control(obj)
+            %
+            
+            % Use listener handle to connect callback method to execute
+            % when subscriber receives a message
+            obj.lh = event.listener(obj.sub, 'OnMessageReceived', @(h,e) obj.control_callback(h, e));
+        
+        end
+        
+        function obj = control_callback(obj, ~, e)
             % CALLBACK Envoked on receipt of state estimate. Records data
             % and sends proper control input back to ROS if enabled.
             %
@@ -391,7 +408,7 @@ classdef (Abstract) dcsl_robot < handle
             end
             
             % Record state estimates into memory and history
-            obj.state_estimates = obj.states_struct2mat(states_struct, obj.last_command);
+            obj.state_estimates = obj.states_struct2mat(states_struct);
             obj.state_estimate_history(:, end+1, :) = [ones(obj.n_robots, 1)*time obj.state_estimates];
             
             % Execute closed loop control if enabled
@@ -422,7 +439,7 @@ classdef (Abstract) dcsl_robot < handle
             obj.sub.unsubscribe
             obj.vel_pub.unadvertise
             obj.wp_pub.unadvertise
-            obj.dir_pub.undvertise
+            obj.direct_pub.unadvertise
             delete(obj.lh)
             delete(obj.ws)
         end
@@ -449,7 +466,7 @@ classdef (Abstract) dcsl_robot < handle
                     obj.wp_pub.publish(commands_struct);
                 case 'direct'
                     commands_struct = obj.commands_mat2dir_struct(command_array);
-                    obj.dir_pub.publish(commands_struct);
+                    obj.direct_pub.publish(commands_struct);
             end
         end
         
@@ -469,65 +486,92 @@ classdef (Abstract) dcsl_robot < handle
             
             % Save active control mode and control law so they can be put
             % back in place after going to pose
+            %{
             active_ctrl_mode = obj.control_mode;
             active_ctrl_state = obj.control_on;
+            %}
             
+            %{
             % Turn control off and switch to waypoint
             obj.control_on = false;
             obj.control_mode = 'waypoint';
+            drawnow();
+            %}
             
-            time_step = 1/10;
-            eps = 0.01;
+            time_step = 2;
+            eps = 0.2;
             
             % Find error
-            error = 0;
+            error = Inf;
+            
+            %{
             for i=1:obj.n_robots
                 x_e = (poses(i,1) - obj.state_estimates(i,1))^2;
                 y_e = (poses(i,2) - obj.state_estimates(i,2))^2;
                 z_e = (poses(i,3) - obj.state_estimates(i,3))^2;
-                theta_e = (poses(i,4) - obj.state_estimate(i,6))^2;
+                theta_e = (poses(i,4) - obj.state_estimates(i,6))^2;
                 error = error + x_e + y_e + z_e + theta_e;
             end
-           
+            %}
             time = 0;
             
+            % Start go to poses control
+            wp_lh = event.listener(obj.sub, 'OnMessageReceived', @(h,e) obj.go_to_poses_callback(h,e, poses));
             
             % Do control to direct robots to points
-            while error > eps && timeout < time
-                % Direct robots to poses
-                obj.ros_command(poses);
+            while error > eps && timeout > time
                 
                 % Wait for time_step
                 pause(time_step)
                 drawnow(); % Process event queue
                 
                 %Calculate error
-                error = 0;
-                for i=1:obj.n_robots
-                    x_e = (poses(i,1) - obj.state_estimates(i,1))^2;
-                    y_e = (poses(i,2) - obj.state_estimates(i,2))^2;
-                    z_e = (poses(i,3) - obj.state_estimates(i,3))^2;
-                    theta_e = (poses(i,4) - obj.state_estimate(i,6))^2;
-                    error = error + x_e + y_e + z_e + theta_e;
-                end
                 
+                if size(obj.state_estimates,1) == obj.n_robots
+                    error = 0;
+                    for i=1:obj.n_robots
+                        x_e = (poses(i,1) - obj.state_estimates(i,1))^2;
+                        y_e = (poses(i,2) - obj.state_estimates(i,2))^2;
+                        z_e = (poses(i,3) - obj.state_estimates(i,3))^2;
+                        theta_e = (poses(i,4) - obj.state_estimates(i,6))^2;
+                        error = error + x_e + y_e + z_e + theta_e;
+                    end
+                end
                 time = time + time_step; % Consider switch to timing functions.
             end
-                
+            
+            % Stop go to poses control
+            delete(wp_lh)
+            
             % Stop robots
             obj.ros_stop();
             
+            %{
             % Set control mode back
             obj.control_mode = active_ctrl_mode;
             obj.control_on = active_ctrl_state;
+            %}
             
             if error < eps
                 succeeded = true;
             else
                 succeeded = false;
                 warning('Poses not reached before timeout in ros_go_to_poses method.');
+                disp(error);
             end
                
+        end
+        
+        function go_to_poses_callback(obj,~,e, poses)
+            %
+            
+            % Receive state data from the event data
+            states_struct = e.data;
+            obj.state_estimates = obj.states_struct2mat(states_struct);
+            
+            commands_struct = obj.commands_mat2wp_struct(poses);
+            obj.wp_pub.publish(commands_struct);
+            
         end
         
         function [commands_struct] = commands_mat2vel_struct(obj, commands_mat)
