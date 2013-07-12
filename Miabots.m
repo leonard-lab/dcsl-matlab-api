@@ -150,8 +150,8 @@ classdef Miabots < dcsl_robot
     %   POSSIBILITY OF SUCH DAMAGE.
     
     properties
-       wp_k1 = 1.0; % Control constant for velocity feedback in waypoint controller
-       wp_k2 = 0.5; % Control constant for angular feedback in waypoint controller
+       wp_k1 = 0.3; % Control constant for velocity feedback in waypoint controller
+       wp_k2 = 0.2; % Control constant for angular feedback in waypoint controller
     end
     
     methods (Access = public)
@@ -179,7 +179,7 @@ classdef Miabots < dcsl_robot
         function [direct_pub] = setup_direct_pub(obj, ros_websocket)
             %
             
-            direct_pub = Publisher(ros_websocket, 'cmd_vel_array', 'dcsl_messages/TwistArray');
+            direct_pub = Publisher(ros_websocket, 'velocity_input', 'dcsl_messages/TwistArray');
         end
         
         function [commands_struct] = commands_mat2dir_struct(obj, commands_mat)
