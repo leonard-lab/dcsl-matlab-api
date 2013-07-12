@@ -700,6 +700,9 @@ classdef (Abstract) dcsl_robot < handle
             % Calculate the number of time steps to reach run time
             t_steps = ceil(obj.run_time/obj.Ts);
             
+            % Seed state estimate
+            obj.state_estimates = obj.states;
+            
             % Record state_estimate at t = 0
             obj.state_estimate_history(:, end+1, :) = [zeros(obj.n_robots,1) obj.state_estimates];
             
