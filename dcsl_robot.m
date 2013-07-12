@@ -435,13 +435,15 @@ classdef (Abstract) dcsl_robot < handle
             %
             % OUTPUT none
             
-            obj.ros_stop
-            obj.sub.unsubscribe
-            obj.vel_pub.unadvertise
-            obj.wp_pub.unadvertise
-            obj.direct_pub.unadvertise
-            delete(obj.lh)
-            delete(obj.ws)
+            if obj.connected
+                obj.ros_stop
+                obj.sub.unsubscribe
+                obj.vel_pub.unadvertise
+                obj.wp_pub.unadvertise
+                obj.direct_pub.unadvertise
+                delete(obj.lh)
+                delete(obj.ws)
+            end
         end
         
         function ros_command(obj, command_array)
