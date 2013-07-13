@@ -1,6 +1,185 @@
 classdef (Abstract) dcsl_robot < handle
-    %UNTITLED2 Summary of this class goes here
-    %   Detailed explanation goes here
+    %DCSL_ROBOT Abstract class for DCSL multi-agent ROS interface and simulator
+    % This class provides an interface to control robots (assumed stable in
+    % pitch and roll) with the DCSL ROS system. The user must provide
+    % initial poses for the robots, a control law, a control method, and a
+    % run time duration. The class can be configured to simulate the
+    % system.
+    %
+    % Summary provided below. More help can be found by typing doc
+    % dcsl_robots or help dcsl_robots.method_name.
+    %
+    % The connection to the ROS system requires installation of the
+    % web-matlab-bridge available at
+    % https://github.com/BrendanAndrade/web-matlab-bridge.
+    %
+    % SYNTAX
+    %
+    % h = dcsl_robot(initial_poses, control_law, control_mode, run_time, options)
+    %
+    % INPUTS
+    % initial_poses: n_robots X [x y z theta] matrix containing the initial
+    % positions and headings of the robots.
+    %
+    % control_law:  Function handle to user provided control law. Function
+    % should accept time and current states of the robots and return input
+    % commands for the robots. Time should be a scalar in seconds. Current
+    % states should be a n_robots X 7 matrix with the second dimension in
+    % the format [x y z vx vz theta theta_dot]. If in velocity control
+    % mode, commands should be returned as a n_robots X 3 matrix with the
+    % second dimension in the format [u_x u_theta u_z]. If in waypoint
+    % mode, commands should be returned as a n_robots X 4 matrix with the
+    % second dimension [x y z theta] of the goal pose. If direct control,
+    % commands should be returned as a n_robots X M inputs matrix with
+    % order consistant across system. Example: @control_law . If control
+    % takes two arguments (time, states) Example: @(t,x)
+    % control_law(t,x,additional,arguments)
+    %
+    % control_mode: 'velocity' 'waypoint' or 'direct'
+    %
+    % run_time: Time in seconds to run the system or simulation. Provide
+    % Inf to run system indefinitely (run mode only).
+    %
+    % OPTIONS
+    % 'sim': Logical. Default: false. true to simulate dynamics in MATLAB.
+    % false to run ROS.
+    %
+    % 'sim_noise': Length 4 Vector. Default: [0 0 0 0]. Standard deviation
+    % of the random gaussian noise applied to [x y z theta] measuremente
+    % estimates during simulation.
+    %
+    % 'Ts': Number. Default: 0.0667. Time step for measurement/control
+    % update. Only affects simulation. If your control law relies on the
+    % time step, it is best to calculate it using the t input to the
+    % control law.
+    %
+    % 'URI': String. Default: 'ws://localhost:9090'. URI of rosbridge
+    % server.
+    %
+    % PROPERTIES
+    %
+    %   n_robots - Number of robots to use. Determined by size of
+    %   initial_poses given at initialization of object.
+    % 
+    %   state_estimate - n_robotsX7 matrix. Current state estimates of the
+    %   robots. Second dimension is in format [x y z vx vz theta
+    %   theta_dot].
+    % 
+    %   state_estimate_history - n_robots x n_time_steps x 8 matrix. Format
+    %   of third dimension is [time x y z vx vz theta theta_dot].
+    %     
+    %   command_history - n_robots x n_times_steps x 4 matrix. Format of
+    %   third dimension is [time u_x u_theta u_z] (velocity) or [x y z
+    %   theta] (waypoint) or direct (as defined).
+    %
+    %   control_mode - 'velocity', 'waypoint', or 'direct' control of the
+    %   robots. Set at initialization of object or via set method.
+    %
+    %   control_law - Function handle to user provided control law.
+    %   Function should accept time and current states of the robots and
+    %   return input commands for the robots. Time should be a scalar in
+    %   seconds. Current states should be a n_robots X 7 matrix with the
+    %   second dimension in the format [x y z vx vz theta theta_dot].
+    %   Commands should be returned as a n_robots X 3 matrix with the
+    %   second dimension in the format [u_x u_theta u_z].  If direct
+    %   control, commands should be returned as a n_robots X M inputs
+    %   matrix with order consistant across system.
+    %
+    %   run_time - Time in seconds to run system or to simulate. To run ROS
+    %   system indefinitely set this to Inf. Required at initialization and
+    %   can be changed with set_run_time.
+    %
+    %   sim - Logical type. Default: False. True if object should simulate
+    %   system in MATLAB. False if system should command ROS. Set via
+    %   set_sim or initialization with 'sim' option.
+    %
+    %   sim_noise -  Length 4 Vector. Default: [0 0 0 0]. Standard
+    %   deviation of the random gaussian noise applied to [x y z theta]
+    %   measuremente estimates during simulation.
+    %
+    %   Ts - Default: 0.0667 (15 Hz). Applies only to
+    %   simulation. Time step to update control loop/receive updated state.
+    %   Set via set.Ts or initialization with 'Ts' option.   
+    %   
+    %   URI - String. Default 'ws://localhost:9090'. URI of the rosbridge
+    %   server. Set at initialization with 'uri' option.
+    %
+    % METHODS
+    %
+    %   connect - Setup connect to ROS without starting control.
+    %
+    %   start - Begin simulation or connect if necessary and start control
+    %   of ROS system. Robots will move to initial poses and then system
+    %   will execute the control law for the run time.
+    %
+    %   stop - Stop robots in ROS. Interrupt timed run or end
+    %   indefinite run. Does not effect MATLAB simulation. Sets inputs to
+    %   zero.
+    %
+    %   shutdown - Stop robots and close connection to ROS.
+    %   
+    %   command - Send command to ROS system if it is not beinging
+    %   automatically controlled. If in velocity or direct mode, command
+    %   should be in the format: n_robots X 3 matrix with the second
+    %   dimension in the format [u_x u_theta u_z]. If waypoint mode,
+    %   n_robots X 4 with second dimension [x y z theta] as the goal
+    %   waypoint.
+    %
+    %   enable_control - turns on control law manually and begins gathering
+    %   state infomration
+    %
+    %   disable_control - turns off control law, system will still poll
+    %   state information
+    %
+    %   go_to_poses - moves the robots to supplied poses. Works in sim and
+    %   run modes.
+    %
+    %   get_history(robot_ID, parameter) robot_ID is the index of the
+    %   robot's initial_poses in that matrix. parameter options are:
+    %   'state': returns n_time_stepsX7 array with second dimension as [x y
+    %   z vx vz theta theta_dot]
+    %   'state_times': returns n_time_steps vector with times of state
+    %   updates
+    %   'x', 'y', 'z', 'vx', 'vz', 'theta', 'theta_dot': returns
+    %   n_time_steps vector with corresponding state history
+    %   'command': returns n_time_stepsX3 array with second dimension as
+    %   [ux utheta uz] or [x y z theta]
+    %   'command_times': returns n_time_steps vector with times of command
+    %   sends
+    %   'u1' 'u2' 'u3', 'u4': returns n_time_steps vector with corresponding
+    %   command history. If velocity or direct u1=ux u2=utheta u3=uz. If
+    %   waypoint u1=x u2=y u3=z u4=theta of the waypoints.
+    %
+    % LICENSE
+    %
+    % This software is covered under the 2-clause BSD license.
+    %   
+    %   Copyright (c) 2013, Brendan Andrade
+    %   All rights reserved.
+    %   
+    %   Redistribution and use in source and binary forms, with or without 
+    %   modification, are permitted provided that the following conditions 
+    %   are met:
+    %
+    %   Redistributions of source code must retain the above copyright 
+    %   notice, this list of conditions and the following disclaimer.
+    %   
+    %   Redistributions in binary form must reproduce the above copyright 
+    %   notice, this list of conditions and the following disclaimer in the
+    %   documentation and/or other materials provided with the distribution.
+    % 
+    %   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS 
+    %   "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT 
+    %   LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS 
+    %   FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE 
+    %   COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, 
+    %   INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, 
+    %   BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; 
+    %   LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER 
+    %   CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT 
+    %   LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN 
+    %   ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE 
+    %   POSSIBILITY OF SUCH DAMAGE.
     
     properties(Access = public)
         control_mode % 'velocity' 'waypoint' or 'direct'
@@ -47,7 +226,12 @@ classdef (Abstract) dcsl_robot < handle
     
     methods
         function set.control_mode(obj, value)
+            % SET_CONTROL_MODE Ensures valid control mode is supplied
             %
+            % SYNOPSIS set.control_mode(obj, value)
+            %
+            % INPUTS obj: the object
+            % value: a string, the control mode: velocity direct or waypoint
             
             if any(strcmpi(value, {'velocity', 'direct', 'waypoint'}))
                 obj.control_mode = value;
@@ -144,7 +328,15 @@ classdef (Abstract) dcsl_robot < handle
         end
         
         function connect(obj)
-            % 
+            % CONNECT Setup the connect to ROS without starting the control
+            % law.
+            %
+            % SYNOPSIS connect(obj)
+            %
+            % INPUT obj: the object
+            %
+            % OUTPUT none
+            
             if obj.connected == false
                 obj.setup_ros_connection();
             end
@@ -216,7 +408,15 @@ classdef (Abstract) dcsl_robot < handle
         end
         
         function enable_control(obj)
-            % 
+            % ENABLE_CONTROL If in run mode, start receiving state
+            % estimates from system and enable closed loop control using
+            % supplied control law.
+            %
+            % SYNOPSIS enable_control(obj)
+            %
+            % INPUT obj: the object
+            %
+            % OUTPUT none
             
             if obj.sim == false
                 obj.control_on = true;
@@ -225,7 +425,14 @@ classdef (Abstract) dcsl_robot < handle
         end
         
         function disable_control(obj)
+            % DISABLE_CONTROL Stop execution of control law. State
+            % estimates will continue to be polled.
             %
+            % SYNOPSIS disable_control(obj)
+            %
+            % INPUT obj: the object
+            %
+            % OUTPUT none
             
             obj.control_on = false;
         end
@@ -340,6 +547,8 @@ classdef (Abstract) dcsl_robot < handle
                     history = squeeze(obj.command_history(ID, :, 3));
                 case 'u3'
                     history = squeeze(obj.command_history(ID, :, 4));
+                case 'u4'
+                    history = squeeze(obj.command_history(ID, :, 5));
             end
             
         end
@@ -358,6 +567,14 @@ classdef (Abstract) dcsl_robot < handle
         end
         
         function reset_time(obj)
+            % RESET_TIME Set time recorded in history back to zero.
+            %
+            % SYNOPSIS reset_time(obj)
+            %
+            % INPUT obj: the object
+            %
+            % OUTPUT none
+                       
             obj.first_callback = true;
         end
         
@@ -400,7 +617,14 @@ classdef (Abstract) dcsl_robot < handle
         end
         
         function start_ros_control(obj)
+            % START_ROS_CONTROL Setup listener handle to receive state
+            % estimates and do control if control is enabled.
             %
+            % SYNOPSIS start_ros_control(obj)
+            %
+            % INPUT obj: the object
+            %
+            % OUTPUT none
             
             % Use listener handle to connect callback method to execute
             % when subscriber receives a message
@@ -519,35 +743,12 @@ classdef (Abstract) dcsl_robot < handle
             % OUTPUT succeeded: a logical. true = goal poses reached, false
             % otherwise
             
-            % Save active control mode and control law so they can be put
-            % back in place after going to pose
-            %{
-            active_ctrl_mode = obj.control_mode;
-            active_ctrl_state = obj.control_on;
-            %}
-            
-            %{
-            % Turn control off and switch to waypoint
-            obj.control_on = false;
-            obj.control_mode = 'waypoint';
-            drawnow();
-            %}
-            
             time_step = 2;
             eps = 0.2;
             
             % Find error
             error = Inf;
-            
-            %{
-            for i=1:obj.n_robots
-                x_e = (poses(i,1) - obj.state_estimates(i,1))^2;
-                y_e = (poses(i,2) - obj.state_estimates(i,2))^2;
-                z_e = (poses(i,3) - obj.state_estimates(i,3))^2;
-                theta_e = (poses(i,4) - obj.state_estimates(i,6))^2;
-                error = error + x_e + y_e + z_e + theta_e;
-            end
-            %}
+           
             time = 0;
             
             % Start go to poses control
@@ -581,12 +782,6 @@ classdef (Abstract) dcsl_robot < handle
             % Stop robots
             obj.ros_stop();
             
-            %{
-            % Set control mode back
-            obj.control_mode = active_ctrl_mode;
-            obj.control_on = active_ctrl_state;
-            %}
-            
             if error < eps
                 succeeded = true;
             else
@@ -598,12 +793,24 @@ classdef (Abstract) dcsl_robot < handle
         end
         
         function go_to_poses_callback(obj,~,e, poses)
+            % GO_TO_POSES_CALLBACK Envoked on receipt of state estimate
+            % during ros_go_to_poses method.
             %
+            % SYNOPSIS go_to_poses_callback(obj,~,e, poses)
+            %
+            % INPUTS obj: the object
+            % ~: placeholder for event handle
+            % e: event data sent to callback function on event trigger
+            % poses: an n_robots X 4 matrix where the 2nd dimension is the
+            % goal poses [x y z theta]
+            %
+            % OUTPUT none
             
             % Receive state data from the event data
             states_struct = e.data;
             obj.state_estimates = obj.states_struct2mat(states_struct);
             
+            % Send goal poses
             commands_struct = obj.commands_mat2wp_struct(poses);
             obj.wp_pub.publish(commands_struct);
             
