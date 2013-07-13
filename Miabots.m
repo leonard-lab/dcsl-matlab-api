@@ -97,7 +97,7 @@ classdef Miabots < dcsl_robot
     %   deviation of the random gaussian noise applied to [x y z theta]
     %   measuremente estimates during simulation.
     %
-    %   Ts - Default: 0.04 (25 Hz). Applies only to
+    %   Ts - Default: 0.0667 (15 Hz). Applies only to
     %   simulation. Time step to update control loop/receive updated state.
     %   Set via set.Ts or initialization with 'Ts' option.   
     %   
