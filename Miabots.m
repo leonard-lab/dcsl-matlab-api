@@ -260,7 +260,7 @@ classdef Miabots < dcsl_robot
             phi = wrapToPi(atan2(waypoint(2)-state(2), waypoint(1)-state(1)) - state(6));
             
             % Find distance to waypoint
-            r = (waypoint(1) - state(1))^2 + (waypoint(2) - state(2))^2;
+            r = sqrt((waypoint(1) - state(1))^2 + (waypoint(2) - state(2))^2);
             
             % Calculate control
             ux = obj.wp_k1*r*cos(phi);
