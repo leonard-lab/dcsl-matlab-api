@@ -553,6 +553,38 @@ classdef (Abstract) dcsl_robot < handle
             
         end
         
+        function plot_history(obj, robot_ID)
+            
+            state_names = {'x', 'y', 'z', 'vx', 'vz', 'theta', 'theta_dot'};
+            
+            figure
+            n_states = 7;
+            for i=1:n_states
+                subplot(n_states, 1, i);
+                plot(obj.get_history(robot_ID, 'state_times'), obj.get_history(robot_ID, state_names{i}))
+                ylabel(state_names{i});
+                if i==1
+                    title('State history');
+                end
+            end
+            xlabel('Time (s)')
+            
+            figure
+            if strcmp(obj.control_mode,'direct')
+                inputs = {'u1', 'u2', 'u3'};
+                n_inputs = 3;
+            end
+            for i=1:n_inputs
+                subplot(n_inputs, 1, i);
+                plot(obj.get_history(robot_ID, 'command_times'), obj.get_history(robot_ID, inputs{i}))
+                ylabel(inputs{i});
+                if i==1
+                    title('Input history')
+                end
+            end
+            xlabel('Time (s)')
+        end
+        
         function reset_history(obj)
             % RESET_HISTORY Clear the state and command history
             %
