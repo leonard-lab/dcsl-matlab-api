@@ -59,6 +59,7 @@ classdef Belugas < dcsl_robot
                 t_span = [0 dt];
                 [~, x_out] = ode45(@(t,x) obj.dynamics(t, x, U), t_span, states_in(i,:));
                 states_out(i,:) = x_out(end, :);
+                states_out(i,6) = wrapToPi(states_out(i,6));
                 measurements_out(i,:) = states_out(i,:) + [normrnd(0, noise(1)), normrnd(0, noise(2)), normrnd(0, noise(3)), 0, 0, normrnd(0, noise(4)) 0];
             end     
         end
@@ -73,7 +74,7 @@ classdef Belugas < dcsl_robot
             
             % Extract control inputs
             ut   = U(1);    % horizontal thruster input
-            uphi = U(2) * pi/180.0;    % horizontal thruster servo input (radians)
+            uphi = U(2);    % horizontal thruster servo input (radians)
             uz   = U(3);    % vertical thruster input
             
             % Kinematics
