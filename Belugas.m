@@ -26,9 +26,22 @@ classdef Belugas < dcsl_robot
         end
         
         function [direct_pub] = setup_direct_pub(obj, ros_websocket)
+            %
+            
+            direct_pub = Publisher(ros_websocket, 'direct_input', 'dcsl_messages/BelugaArray');
         end
         
         function [commands_struct] = commands_mat2dir_struct(obj, commands_mat)
+            %
+            
+            belugas = repmat(struct('thrust_motor', {}, 'servo', {}, 'vertical_motor', {}), obj.n_robots, 1);
+            
+            for i = 1:obj.n_robots
+                belugas(i).thrust_motor = commands_mat(i,1);
+                belugas(i).servo = commands_mat(i,2);
+                belugas(i).vertical_motor = commands_mat(i,3);
+            end
+            commands_struct = struct('belugas', belugas);
         end
         
         % Simulation related methods
