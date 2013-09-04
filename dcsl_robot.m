@@ -344,14 +344,29 @@ classdef (Abstract) dcsl_robot < handle
         end
             
         
-        function start(obj)
+        function start(obj, varargin)
             % START Begin the simulation or setup connections to ROS. If control is on, commands will begin being sent to ROS.
             %
-            % SYNOPSIS start(obj)
+            % SYNOPSIS start(obj, opt)
             %
             % INPUT obj: the object
+            % 
+            % opt: optional arguments enter name of optional arg as string
+            % followed by the value. Example: ..., 'use_initial_poses', true);
+            % 'initial_poses': a logical, default: true. Set true to have
+            % the robots go to indicated initial poses. Set false to have
+            % the robots start control at current poses (only for ROS run).
             %
             % OUTPUT none
+            
+            p = inputParser;
+            
+            defaultUseInitialPoses = true;
+            addRequired(p, 'obj')
+            addOptional(p, 'use_initial_poses', defaultUseInitialPoses, @islogical);
+            parse(p, obj, varargin{:});
+            
+            use_init = p.Results.use_initial_poses;
           
             if obj.sim == false
                 % Turn control off and setup ROS connection.
@@ -359,7 +374,11 @@ classdef (Abstract) dcsl_robot < handle
                 obj.connect();
                 
                 % Go to initial poses
-                reached_poses = obj.go_to_poses(obj.initial_poses);
+                if use_init
+                    reached_poses = obj.go_to_poses(obj.initial_poses);
+                else
+                    reached_poses = true;
+                end
                 
                 if reached_poses
                     % Clear history and start control.
@@ -371,8 +390,7 @@ classdef (Abstract) dcsl_robot < handle
                 else
                     disp('Initial poses not reached. Try running start again.');
                 end
-                
-                
+                   
             else
                 obj.run_simulation();
             end
