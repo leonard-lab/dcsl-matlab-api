@@ -50,9 +50,9 @@ classdef Belugas < dcsl_robot
             belugas = repmat(struct('thrust_motor', {}, 'servo', {}, 'vertical_motor', {}), obj.n_robots, 1);
             
             for i = 1:obj.n_robots
-                belugas(i).thrust_motor = commands_mat(i,1);
+                belugas(i).thrust_motor = int16(commands_mat(i,1));
                 belugas(i).servo = commands_mat(i,2);
-                belugas(i).vertical_motor = commands_mat(i,3);
+                belugas(i).vertical_motor = int16(commands_mat(i,3));
             end
             commands_struct = struct('belugas', belugas);
         end
