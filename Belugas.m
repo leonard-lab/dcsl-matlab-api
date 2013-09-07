@@ -34,7 +34,8 @@ classdef Belugas < dcsl_robot
             obj.control_on = false;
             drawnow()
             pause(0.1)
-            obj.direct_pub.publish(obj,commands_mat2direct_struct(zeros(obj.n_robots, 3)));
+            message = obj.commands_mat2dir_struct(zeros(obj.n_robots, 3));
+            obj.direct_pub.publish(message);
         end
         
         function [direct_pub] = setup_direct_pub(obj, ros_websocket)
