@@ -726,6 +726,7 @@ classdef (Abstract) dcsl_robot < handle
                 if time > obj.run_time
                     obj.control_on = false;
                     obj.stop();
+                    disp('Run time reached...stopping control.')
                 else
                     obj.ros_command(commands);
                 end
@@ -765,17 +766,24 @@ classdef (Abstract) dcsl_robot < handle
             %
             % OUTPUT none
             
+            % Hack for 1 robot
+            if obj.n_robots == 1
+                special_args = 'array';
+            else
+                special_args = {};
+            end
+            
             % Convert commands to appropriate struct and publish
             switch obj.control_mode
                 case 'velocity'
                     commands_struct = obj.commands_mat2vel_struct(command_array);
-                    obj.vel_pub.publish(commands_struct);
+                    obj.vel_pub.publish(commands_struct, special_args);
                 case 'waypoint'
                     commands_struct = obj.commands_mat2wp_struct(command_array);
-                    obj.wp_pub.publish(commands_struct);
+                    obj.wp_pub.publish(commands_struct, special_args);
                 case 'direct'
                     commands_struct = obj.commands_mat2dir_struct(command_array);
-                    obj.direct_pub.publish(commands_struct);
+                    obj.direct_pub.publish(commands_struct, special_args);
             end
         end
         
@@ -862,7 +870,15 @@ classdef (Abstract) dcsl_robot < handle
             
             % Send goal poses
             commands_struct = obj.commands_mat2wp_struct(poses);
-            obj.wp_pub.publish(commands_struct);
+            
+            % Hack for 1 robot
+            if obj.n_robots == 1
+                special_args = 'array';
+            else
+                special_args = {};
+            end
+            
+            obj.wp_pub.publish(commands_struct, special_args);
             
         end
         
@@ -937,8 +953,18 @@ classdef (Abstract) dcsl_robot < handle
             % dimenstion formatted as [x y z x_dot z_dot theta theta_dot]
             
             states_matrix = zeros(obj.n_robots, 7);
-            for i=1:obj.n_robots
-                states_matrix(i,:) = [states_struct.states(i).pose.position.x states_struct.states(i).pose.position.y states_struct.states(i).pose.position.z states_struct.states(i).twist.linear.x states_struct.states(i).twist.linear.z states_struct.states(i).pose.orientation.z states_struct.states(i).twist.angular.z];
+            if obj.n_robots == 1
+                states_matrix(1,:) = [states_struct.states{1,1}.pose.position.x...
+                    states_struct.states{1,1}.pose.position.y...
+                    states_struct.states{1,1}.pose.position.z...
+                    states_struct.states{1,1}.twist.linear.x...
+                    states_struct.states{1,1}.twist.linear.z...
+                    states_struct.states{1,1}.pose.orientation.z...
+                    states_struct.states{1,1}.twist.angular.z];
+            else
+                for i=1:obj.n_robots
+                    states_matrix(i,:) = [states_struct.states(i).pose.position.x states_struct.states(i).pose.position.y states_struct.states(i).pose.position.z states_struct.states(i).twist.linear.x states_struct.states(i).twist.linear.z states_struct.states(i).pose.orientation.z states_struct.states(i).twist.angular.z];
+                end
             end
         end
         
