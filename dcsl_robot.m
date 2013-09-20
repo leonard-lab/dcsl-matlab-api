@@ -591,6 +591,9 @@ classdef (Abstract) dcsl_robot < handle
             if strcmp(obj.control_mode,'direct')
                 inputs = {'u1', 'u2', 'u3'};
                 n_inputs = 3;
+            elseif strcmp(obj.control_mode, 'velocity')
+                inputs = {'u1', 'u2', 'u3'};
+                n_inputs = 3;
             end
             for i=1:n_inputs
                 subplot(n_inputs, 1, i);
