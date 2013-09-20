@@ -1,9 +1,9 @@
 clear m
 close all
-initial_poses = [0 0 0 0; 0 0 0 0];
-runtime = 5;
+initial_poses = [0 0 0 0];
+runtime = 10;
 noise = [0.01, 0.01, 0, 0.01];
-m = Belugas(initial_poses, @TestControlLaw, 'direct', runtime, 'sim', false);%, 'sim_noise', noise);
+m = Belugas(initial_poses, @TestControlLaw, 'velocity', runtime, 'sim', false);%, 'sim_noise', noise);
 m.start('use_initial_poses', false)
 
 %%
