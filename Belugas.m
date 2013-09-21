@@ -9,11 +9,30 @@ classdef Belugas < dcsl_robot
         
     end
     
+    properties (Access = private)
+        K
+        vx_setpoints
+        vz_setpoints
+        z_range
+        theta_dot_setpoints
+    end
+    
     methods (Access = public)
         
         function obj = Belugas(initial_poses, control_law, control_mode, run_time, varargin)
             % Inherit from superclass
             obj = obj@dcsl_robot(initial_poses, control_law, control_mode, run_time, varargin{:});
+            
+            addpath('yamlmatlab')
+            
+            YamlStruct = ReadYaml('vel_controller.yaml',1);
+            
+            obj.K = reshape(cell2mat(YamlStruct.K_flat), cell2mat(YamlStruct.K_shape));
+            obj.vx_setpoints = cell2mat(YamlStruct.axis_2_coordinates);
+            obj.vz_setpoints = cell2mat(YamlStruct.axis_3_coordinates);
+            obj.z_range = cell2mat(YamlStruct.axis_1_coordinates);
+            obj.theta_dot_setpoints = cell2mat(YamlStruct.axis_4_coordinates);
+            
         end
         
     end
@@ -153,7 +172,57 @@ classdef Belugas < dcsl_robot
             dX = [xDot yDot zDot uDot wDot thetaDot thetaDotDot]';
         end
             
-        function [u_thrust, u_phi, u_vert] = vel_law(obj, state, vel_cmd)
+        function u_direct = vel_law(obj, state, vel_cmd)
+            
+            x_star_reduced = [state(3) vel_cmd(1) vel_cmd(3) vel_cmd(2)];
+            x_reduced = [state(3) state(4) state(5) state(7)];
+            
+            u_star = obj.calc_u_nominal(x_star_reduced);
+            K_star = obj.interpolate_K(x_star_reduced);
+            e = x_reduced-x_star_reduced;
+            u_direct = (-K_star*e' + u_star')';
+        end
+       
+        function [K_out] = interpolate_K(obj, x)
+            
+            n_inputs = 3;
+            n_states = 4;
+            
+            [g1, g2, g3, g4] = ndgrid(obj.z_range, obj.vx_setpoints, obj.vz_setpoints, obj.theta_dot_setpoints);
+            K_out = zeros(n_inputs, n_states);
+            
+            for j=1:n_states
+                for i=1:n_inputs
+                    K_out(i,j) = interpn(g1, g2, g3, g4, obj.K(:,:,:,:,i,j), x(1),x(2),x(3),x(4));
+                end
+            end
+        end
+        
+        function [u_star] = calc_u_nominal(obj, x_star)
+            
+            x3 = x_star(1);
+            x4 = x_star(2);
+            x5 = x_star(3);
+            x7 = x_star(4);
+            
+            if x5 >= 0
+                eta3 = obj.params.eta3Up;
+            else
+                eta3 = obj.params.eta3Down;
+            end
+            
+            u3 = (obj.params.Kd3*x5*abs(x5) - obj.params.Kg*(obj.params.zOffset - x3))/((1-eta3)*obj.params.Kt);
+            if x4 ~= 0
+                u2 = atan(-(obj.params.KOmega*x7*abs(x7) + obj.params.Kdz*u3)/(obj.params.Kd1*obj.params.r*x4*abs(x4)));
+            else
+                u2 = sign(x7) * -pi/2;
+            end
+            if u2 ~= 0
+                u1 = -(obj.params.KOmega*x7*abs(x7) + obj.params.Kdz*u3)/((1-obj.params.eta1)*obj.params.Kt*obj.params.r*sin(u2));
+            else
+                u1 = (obj.params.Kd1*x4*abs(x4))/((1-obj.params.eta1)*obj.params.Kt);
+            end
+            u_star = [u1 u2 u3];
         end
         
         function [u_thrust, u_phi, u_vert] = wp_law(obj, state, waypoint)
