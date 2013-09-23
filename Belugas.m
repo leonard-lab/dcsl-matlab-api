@@ -23,16 +23,17 @@ classdef Belugas < dcsl_robot
             % Inherit from superclass
             obj = obj@dcsl_robot(initial_poses, control_law, control_mode, run_time, varargin{:});
             
-            addpath('yamlmatlab')
+            path_to_Belugas = mfilename('fullpath');
+            k = strfind(path_to_Belugas, '/');
+            path_to_folder = path_to_Belugas(1:k(end));
+            path_to_vel_params = strcat(path_to_folder, 'vel_controller.mat');
+            load(path_to_vel_params);
             
-            YamlStruct = ReadYaml('vel_controller.yaml',1);
-            
-            obj.K = reshape(cell2mat(YamlStruct.K_flat), cell2mat(YamlStruct.K_shape));
-            obj.vx_setpoints = cell2mat(YamlStruct.axis_2_coordinates);
-            obj.vz_setpoints = cell2mat(YamlStruct.axis_3_coordinates);
-            obj.z_range = cell2mat(YamlStruct.axis_1_coordinates);
-            obj.theta_dot_setpoints = cell2mat(YamlStruct.axis_4_coordinates);
-            
+            obj.K = K_array;
+            obj.vx_setpoints = vx_sp;
+            obj.vz_setpoints = vz_sp;
+            obj.z_range = z_sp;
+            obj.theta_dot_setpoints = td_sp;
         end
         
     end
