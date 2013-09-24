@@ -1,23 +1,24 @@
-function [ commands ] = WpControlLaw(t, states)
+function [ commands ] = WpControlLaw(t, states, waypoint)
 %TestControlLaw Summary of this function goes here
 %   Detailed explanation goes here
 
 global r_h p_h d_h k_h
 
 k1 = 1;
-k2 = 4;
-k3 = 0.5;
+k2 = 2;
+k3 = 0.1;
+k4 = 1;
 
 v_max = 0.5;
 beta = 0.2;
 lambda = 2;
 omega_max = 1;
 
-r_park = 0.5;
+r_park = 0.25;
+r_ok = 0.10;
 
 kz = 5;
 
-waypoint = [1 1 1.2 pi/2];
 x = states(1,:);
 
 r = sqrt((x(1)-waypoint(1))^2 + (x(2)-waypoint(2))^2);
@@ -35,6 +36,9 @@ else
     reverse = false;
 end
 
+delta = wrapToPi(delta);
+psi = wrapToPi(psi);
+
 r_h(end+1,:) = [t r];
 p_h(end+1,:) = [t psi];
 d_h(end+1,:) = [t delta];
@@ -47,9 +51,30 @@ v = v_max/(1+beta*abs(kappa)^lambda);
 
 if r < r_park
     v = k3*r; % Slow to park
+    disp('Parking')
 end
 
 omega = kappa*v;
+
+
+
+if reverse == true
+    v = -v;
+    omega = -omega;
+    disp('Reversing')
+end
+
+vz = -kz*(x(3) - waypoint(3));
+
+if r < r_ok
+    v = 0;
+    omega = k4*(waypoint(4) - x(6));
+    disp('r ok!')
+    if abs(psi) < -0.2
+        omega = 0;
+        disp('theta ok!');
+    end
+end
 
 if abs(v) - v_max > 0
     v = v_max;
@@ -58,13 +83,6 @@ end
 if abs(omega) > omega_max
     omega = sign(omega) * omega_max;
 end
-
-if reverse == true
-    v = -v;
-    omega = -omega;
-end
-
-vz = -kz*(x(3) - waypoint(3));
 
 u = [v omega vz];
 

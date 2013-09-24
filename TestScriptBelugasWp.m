@@ -1,10 +1,10 @@
-clear m r_h p_h d_h k_h
+clear all
 close all
 
 global r_h p_h d_h k_h
 
 initial_poses = [0 0 1.2 0];
-runtime = 10;
+runtime = 30;
 noise = [0.01, 0.01, 0, 0.01]*0;
 
 r_h = [0 0];
@@ -12,9 +12,11 @@ p_h = [0 0];
 d_h = [0 0];
 k_h = [0 0];
 
-cl = @(t,x) WpControlLaw(t,x);
+waypoint = [-1 1 1.2 3*pi/4];
 
-m = Belugas(initial_poses, cl, 'velocity', runtime, 'sim', true, 'sim_noise', noise);
+cl = @(t,x) WpControlLaw(t,x, waypoint);
+
+m = Belugas(initial_poses, cl, 'velocity', runtime, 'sim', false, 'sim_noise', noise);
 m.start('use_initial_poses', false)
 
 %%
@@ -31,3 +33,5 @@ subplot(4,1,2); plot(p_h(:,1), p_h(:,2)); ylabel('psi');
 subplot(4,1,3); plot(d_h(:,1), d_h(:,2)); ylabel('delta');
 subplot(4,1,4); plot(k_h(:,1), k_h(:,2)); ylabel('kappa');
 xlabel('Time (s)');
+
+gen_velocity_plot
