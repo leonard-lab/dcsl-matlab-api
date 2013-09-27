@@ -17,7 +17,7 @@ waypoint = [1 1 1.2 pi/2];
 
 cl = @(t,x) WpControlLaw(t,x, waypoint);
 
-m = Belugas(initial_poses, cl, 'velocity', runtime, 'sim', true, 'sim_noise', noise);
+m = Belugas(initial_poses, cl, 'velocity', runtime, 'sim', false, 'sim_noise', noise);
 m.start('use_initial_poses', false)
 
 %%

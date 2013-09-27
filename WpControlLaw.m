@@ -6,15 +6,15 @@ global a_h r_h p_h d_h k_h
 
 k1 = 1;
 k2 = 2;
-k3 = 2;
-k4 = 1;
+k3 = 5;
+k4 = 2;
 
 v_max = 0.5;
 beta = 0.2;
 lambda = 2;
 omega_max = 1;
 
-r_park = 0.25;
+r_park = 0.30;
 r_ok = 0.10;
 
 kz = 5;
