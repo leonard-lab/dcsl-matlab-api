@@ -594,6 +594,9 @@ classdef (Abstract) dcsl_robot < handle
             elseif strcmp(obj.control_mode, 'velocity')
                 inputs = {'u1', 'u2', 'u3'};
                 n_inputs = 3;
+            elseif strcmp(obj.control_mode, 'waypoint')
+                inputs = {'u1', 'u2', 'u3', 'u4'};
+                n_inputs = 4;
             end
             for i=1:n_inputs
                 subplot(n_inputs, 1, i);
@@ -653,7 +656,7 @@ classdef (Abstract) dcsl_robot < handle
                 
                 % Initialize publisher objects
                 obj.vel_pub = Publisher(obj.ws, 'velocity_input', 'dcsl_messages/TwistArray');
-                obj.wp_pub = Publisher(obj.ws, 'waypoint_input', 'geometry_msgs/PoseArray');
+                obj.wp_pub = Publisher(obj.ws, 'wp_input', 'geometry_msgs/PoseArray');
                 obj.direct_pub = obj.setup_direct_pub(obj.ws);
                 
                 % Initialize subscriber object
@@ -803,6 +806,8 @@ classdef (Abstract) dcsl_robot < handle
             %
             % OUTPUT succeeded: a logical. true = goal poses reached, false
             % otherwise
+            
+            disp('Going to initial poses...')
             
             time_step = 2;
             eps = 0.2;
