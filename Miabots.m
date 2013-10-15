@@ -213,7 +213,15 @@ classdef Miabots < dcsl_robot
             drawnow();
             pause(0.1);
             % Send zero inputs to robots
-            obj.vel_pub.publish(obj.commands_mat2vel_struct(zeros(obj.n_robots, 3)));
+            
+            % Hack for 1 robot
+            if obj.n_robots == 1
+                special_args = 'array';
+            else
+                special_args = {};
+            end
+            
+            obj.vel_pub.publish(obj.commands_mat2vel_struct(zeros(obj.n_robots, 3)), special_args);
         end
         
         function [direct_pub] = setup_direct_pub(obj, ros_websocket)
