@@ -136,7 +136,7 @@ classdef Miabots < dcsl_robot
     %
     %   get_history(robot_ID, parameter) robot_ID is the index of the
     %   robot's initial_poses in that matrix. parameter options are:
-    %   'state': returns n_time_stepsX7 array with second dimension as [x y
+    %   'states': returns n_time_stepsX7 array with second dimension as [x y
     %   z vx vz theta theta_dot]
     %   'state_times': returns n_time_steps vector with times of state
     %   updates
