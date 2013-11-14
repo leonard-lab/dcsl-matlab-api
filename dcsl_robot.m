@@ -867,7 +867,7 @@ classdef (Abstract) dcsl_robot < handle
             delete(wp_lh)
             
             % Stop robots
-            qfprintf('stopping robots\n');
+            fprintf('stopping robots\n');
             obj.ros_stop();
             
             if error < eps
