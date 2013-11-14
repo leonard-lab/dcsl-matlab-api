@@ -750,12 +750,19 @@ classdef (Abstract) dcsl_robot < handle
             % OUTPUT none
             
             if obj.connected
+                fprintf('ros_stop\n');
                 obj.ros_stop
+                fprintf('sub.unsubscribe\n');
                 obj.sub.unsubscribe
+                fprintf('vel_pub.unadvertise\n');
                 obj.vel_pub.unadvertise
+                fprintf('wp_pub.unadvertise\n');
                 obj.wp_pub.unadvertise
+                fprintf('direct_pub.unadvertise\n');
                 obj.direct_pub.unadvertise
+                fprintf('delete(obj.lh)\n');
                 delete(obj.lh)
+                fprintf('delete(obj.ws)\n');
                 delete(obj.ws)
             end
         end
@@ -820,15 +827,27 @@ classdef (Abstract) dcsl_robot < handle
             % Start go to poses control
             wp_lh = event.listener(obj.sub, 'OnMessageReceived', @(h,e) obj.go_to_poses_callback(h,e, poses));
             
+            % Send goal poses
+            commands_struct = obj.commands_mat2wp_struct(poses);
+            
+            % Hack for 1 robot
+            if obj.n_robots == 1
+                special_args = 'array';
+            else
+                special_args = {};
+            end
+            
+            obj.wp_pub.publish(commands_struct, special_args);
+
+
             % Do control to direct robots to points
             while error > eps && timeout > time
                 
                 % Wait for time_step
+                fprintf('calling pause\n');
                 pause(time_step)
-                drawnow(); % Process event queue
                 
-                %Calculate error
-                
+                %Calculate error                
                 if size(obj.state_estimates,1) == obj.n_robots
                     error = 0;
                     for i=1:obj.n_robots
@@ -840,12 +859,15 @@ classdef (Abstract) dcsl_robot < handle
                     end
                 end
                 time = time + time_step; % Consider switch to timing functions.
+                fprintf('error is %.3f, at time t = %.0f\n',error,time);
             end
             
             % Stop go to poses control
+            %fprintf('deleting wp_lh\n');
             delete(wp_lh)
             
             % Stop robots
+            qfprintf('stopping robots\n');
             obj.ros_stop();
             
             if error < eps
@@ -875,19 +897,6 @@ classdef (Abstract) dcsl_robot < handle
             % Receive state data from the event data
             states_struct = e.data;
             obj.state_estimates = obj.states_struct2mat(states_struct);
-            
-            % Send goal poses
-            commands_struct = obj.commands_mat2wp_struct(poses);
-            
-            % Hack for 1 robot
-            if obj.n_robots == 1
-                special_args = 'array';
-            else
-                special_args = {};
-            end
-            
-            obj.wp_pub.publish(commands_struct, special_args);
-            
         end
         
         function [commands_struct] = commands_mat2vel_struct(obj, commands_mat)

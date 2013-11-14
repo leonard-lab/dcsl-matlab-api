@@ -210,7 +210,7 @@ classdef Miabots < dcsl_robot
             
             obj.control_on = false;
             % Wait for callbacks to complete
-            drawnow();
+            %drawnow();
             pause(0.1);
             % Send zero inputs to robots
             
